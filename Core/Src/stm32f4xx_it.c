@@ -240,8 +240,7 @@ void EXTI4_IRQHandler(void)
     key0_pressed = 1;
   }
   /* USER CODE END EXTI4_IRQn 0 */
-  // 注意：不调用 HAL_GPIO_EXTI_IRQHandler，因为我们已经手动处理了中断
-  // HAL_GPIO_EXTI_IRQHandler(Key0_Pin);
+  HAL_GPIO_EXTI_IRQHandler(Key0_Pin);
   /* USER CODE BEGIN EXTI4_IRQn 1 */
 
   /* USER CODE END EXTI4_IRQn 1 */

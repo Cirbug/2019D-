@@ -106,6 +106,10 @@ static uint16_t value_3db = 0;
 static uint16_t draw_val[280];
 static uint32_t FH = 0;
 static uint16_t draw_val_norm_prev = 0;  // 边扫边画时保存上一个归一化值
+static float av_max = 0.0f;              // 通带最大放大倍数 Av_max = Uo_max / Ui_ref
+static float ui_ref = 1.0f;              // 输入电压参考值（在粗扫最大值频率点测得）
+static uint16_t y_mid1 = 0;              // Y轴1/3刻度线Y坐标
+static uint16_t y_mid2 = 0;              // Y轴2/3刻度线Y坐标
 
 // ======================= 限幅滤波last值 =======================
 static int last_adc1_val = 0;
@@ -308,15 +312,13 @@ void Page1_Init(void)
     LCD_DrawLine(GRAPH_X0, GRAPH_Y0, GRAPH_X1, GRAPH_Y0);  // X轴
     LCD_DrawLine(GRAPH_X0, GRAPH_Y0, GRAPH_X0, GRAPH_Y1);  // Y轴
 
-    // Y轴刻度 (参考工程：3/2/1 归一化)
+    // Y轴刻度 - 初始显示占位符，粗扫完成后更新为实际Av值
     LCD_DrawLine(GRAPH_X0, GRAPH_Y1, GRAPH_X0 + 3, GRAPH_Y1);  // 顶部刻度线
-    LCD_ShowString(GRAPH_X0 - 10, GRAPH_Y1 - 4, 20, 14, 12, (uint8_t *)"3");
-    u16 y_mid2 = GRAPH_Y1 + GRAPH_H * 1 / 3;
+    LCD_ShowString(GRAPH_X0 - 10, GRAPH_Y1 - 4, 30, 14, 12, (uint8_t *)"Av");
+    y_mid2 = GRAPH_Y1 + GRAPH_H * 1 / 3;
     LCD_DrawLine(GRAPH_X0, y_mid2, GRAPH_X0 + 3, y_mid2);
-    LCD_ShowString(GRAPH_X0 - 10, y_mid2 - 4, 20, 14, 12, (uint8_t *)"2");
-    u16 y_mid1 = GRAPH_Y1 + GRAPH_H * 2 / 3;
+    y_mid1 = GRAPH_Y1 + GRAPH_H * 2 / 3;
     LCD_DrawLine(GRAPH_X0, y_mid1, GRAPH_X0 + 3, y_mid1);
-    LCD_ShowString(GRAPH_X0 - 10, y_mid1 - 4, 20, 14, 12, (uint8_t *)"1");
 
     // X轴刻度 - 对应实际扫频范围 1kHz~155kHz
     // 280个点，步进550Hz，最大频率 = 1000 + 279*550 = 154450 ≈ 155kHz
@@ -345,13 +347,13 @@ static uint16_t ReadAD637(void)
 {
     uint16_t val = 0;
     
-    // 丢弃前2次不稳定采样
+    // 丢弃前2次不稳定采样 (Start一次，连续扫描)
+    HAL_ADC_Start(&hadc3);
     for(int d = 0; d < 2; d++)
     {
-        HAL_ADC_Start(&hadc3);
-        HAL_ADC_PollForConversion(&hadc3, 10);
+        HAL_ADC_PollForConversion(&hadc3, 10); // 等IN4(交流)
         (void)HAL_ADC_GetValue(&hadc3);         // 丢弃IN4
-        HAL_ADC_PollForConversion(&hadc3, 10);
+        HAL_ADC_PollForConversion(&hadc3, 10); // 等IN5(AD637直流)
         (void)HAL_ADC_GetValue(&hadc3);         // 丢弃IN5
     }
     
@@ -359,12 +361,12 @@ static uint16_t ReadAD637(void)
     #define AD637_AVG_CNT 12
     for(int i = 0; i < AD637_AVG_CNT; i++)
     {
-        HAL_ADC_Start(&hadc3);
         HAL_ADC_PollForConversion(&hadc3, 10); // 等IN4(交流)
         (void)HAL_ADC_GetValue(&hadc3);         // 丢弃IN4
         HAL_ADC_PollForConversion(&hadc3, 10); // 等IN5(AD637直流)
         val += HAL_ADC_GetValue(&hadc3);
     }
+    HAL_ADC_Stop(&hadc3);
     #undef AD637_AVG_CNT
     return (uint16_t)(val / 12);
 }
@@ -389,9 +391,9 @@ void Page1_StartSweep(void)
     LCD_DrawLine(GRAPH_X0, GRAPH_Y0, GRAPH_X1, GRAPH_Y0);
     LCD_DrawLine(GRAPH_X0, GRAPH_Y0, GRAPH_X0, GRAPH_Y1);
 
-    // 清除结果区域
+    // 清除底部状态条（不遮挡曲线）
     POINT_COLOR = WHITE;
-    LCD_Fill(5, 25, 200, 105, WHITE);
+    LCD_Fill(5, 222, 315, 239, WHITE);
 
     // 初始化状态 - 一步扫完，边扫边画
     sweep_step = 1;
@@ -429,20 +431,18 @@ void Page1_SweepTask(void)
                 coarse_max_idx = sweep_i;
             }
 
-            // 显示进度（使用图形区上方区域，不与结果重叠）
+            // 进度显示在底部安全区域（Y=222，不遮挡曲线）
             POINT_COLOR = WHITE;
-            LCD_Fill(5, 25, 120, 45, WHITE);
+            LCD_Fill(5, 222, 315, 239, WHITE);
             POINT_COLOR = RED;
-            LCD_ShowString(5, 25, 80, 20, 16, (uint8_t *)"Coarse:");
-            LCD_ShowNum(65, 25, freq / 1000, 3, 16);
-            LCD_ShowString(90, 25, 40, 20, 16, (uint8_t *)"kHz");
+            LCD_ShowString(5, 222, 80, 16, 12, (uint8_t *)"Coarse:");
+            LCD_ShowNum(55, 222, freq / 1000, 3, 12);
+            LCD_ShowString(80, 222, 40, 16, 12, (uint8_t *)"kHz");
 
-            // 百分比显示在标题右侧，不与STOP/DONE重叠
-            POINT_COLOR = WHITE;
-            LCD_Fill(120, 5, 200, 25, WHITE);
+            // 百分比
             POINT_COLOR = GREEN;
-            LCD_ShowNum(120, 5, (uint8_t)((float)(sweep_i+1) / COARSE_POINTS * 50), 3, 16);
-            LCD_ShowString(150, 5, 20, 20, 16, (uint8_t *)"%");
+            LCD_ShowNum(120, 222, (uint8_t)((float)(sweep_i+1) / COARSE_POINTS * 50), 2, 12);
+            LCD_ShowString(135, 222, 20, 16, 12, (uint8_t *)"%");
 
             sweep_i++;
         }
@@ -452,18 +452,65 @@ void Page1_SweepTask(void)
             freq_in_max = COARSE_START + coarse_max_idx * COARSE_STEP;
             printf("Coarse done: MAX=%u at Fmax=%lu\r\n", (unsigned int)coarse_max, (unsigned long)freq_in_max);
 
+            // 在最大值频率点测输入电压 Ui_ref（ADC2），计算最大放大倍数 Av_max
+            AD9954_Set_Fre((float)freq_in_max);
+            HAL_Delay(AD637_SETTLE_MS);
+            {
+                uint32_t ui_sum = 0;
+                #define UI_AVG_CNT 8
+                for(int ui_i = 0; ui_i < UI_AVG_CNT; ui_i++)
+                {
+                    HAL_ADC_Start(&hadc2);
+                    HAL_Delay(1);
+                    ui_sum += HAL_ADC_GetValue(&hadc2);
+                }
+                ui_ref = (float)(ui_sum / UI_AVG_CNT);
+                #undef UI_AVG_CNT
+                if(ui_ref < 1.0f) ui_ref = 1.0f;
+                av_max = (float)coarse_max / ui_ref;
+                printf("Ui_ref=%.0f, Av_max=%.2f\r\n", (double)ui_ref, (double)av_max);
+            }
+
+            // 更新Y轴标签：显示实际放大倍数Av值
+            POINT_COLOR = WHITE;
+            LCD_Fill(GRAPH_X0 - 30, GRAPH_Y1, GRAPH_X0 + 5, GRAPH_Y1 + GRAPH_H, WHITE);
+            POINT_COLOR = BLACK;
+            // 顶部: 显示 Av_max（如 15.2）
+            {
+                uint32_t av_int = (uint32_t)av_max;
+                uint32_t av_dec = (uint32_t)(av_max * 10) % 10;
+                LCD_ShowString(GRAPH_X0 - 25, GRAPH_Y1 - 4, 25, 14, 12, (uint8_t *)"Av");
+                LCD_ShowNum(GRAPH_X0 - 10, GRAPH_Y1 - 4, av_int, 2, 12);
+                LCD_ShowString(GRAPH_X0 + 6, GRAPH_Y1 - 4, 10, 14, 12, (uint8_t *)".");
+                LCD_ShowNum(GRAPH_X0 + 10, GRAPH_Y1 - 4, av_dec, 1, 12);
+            }
+            // 2/3处: 显示 Av_max * 2/3
+            {
+                float av_mid = av_max * 2.0f / 3.0f;
+                uint32_t av_mid_int = (uint32_t)av_mid;
+                LCD_ShowNum(GRAPH_X0 - 10, y_mid2 - 4, av_mid_int, 2, 12);
+            }
+            // 1/3处: 显示 Av_max * 1/3
+            {
+                float av_low = av_max * 1.0f / 3.0f;
+                uint32_t av_low_int = (uint32_t)av_low;
+                LCD_ShowNum(GRAPH_X0 - 10, y_mid1 - 4, av_low_int, 2, 12);
+            }
+
             // 清除进度显示
             POINT_COLOR = WHITE;
             LCD_Fill(5, 25, 120, 45, WHITE);
             LCD_Fill(200, 5, 260, 25, WHITE);
 
-            // 显示粗扫结果（在图形区上方，使用两行）
+            // 清除底部并显示粗扫结果（底部安全区域）
+            POINT_COLOR = WHITE;
+            LCD_Fill(5, 222, 315, 239, WHITE);
             POINT_COLOR = RED;
-            LCD_ShowString(5, 25, 100, 20, 16, (uint8_t *)"MAX:");
-            LCD_ShowNum(45, 25, coarse_max, 4, 16);
-            LCD_ShowString(5, 45, 100, 20, 16, (uint8_t *)"Fmax:");
-            LCD_ShowNum(45, 45, freq_in_max / 1000, 3, 16);
-            LCD_ShowString(75, 45, 40, 20, 16, (uint8_t *)"kHz");
+            LCD_ShowString(5, 222, 60, 16, 12, (uint8_t *)"MAX=");
+            LCD_ShowNum(35, 222, coarse_max, 4, 12);
+            LCD_ShowString(65, 222, 60, 16, 12, (uint8_t *)"Fmax=");
+            LCD_ShowNum(105, 222, freq_in_max / 1000, 3, 12);
+            LCD_ShowString(130, 222, 30, 16, 12, (uint8_t *)"kHz");
 
             // 进入细扫
             sweep_step = 2;
@@ -488,20 +535,18 @@ void Page1_SweepTask(void)
             fine_val[sweep_i] = ReadAD637();
             printf("Fine[%d]: F=%lu ADC=%u\r\n", sweep_i, (unsigned long)freq, (unsigned int)fine_val[sweep_i]);
 
-            // 显示进度（在粗扫结果下方，避免重叠）
+            // 细扫进度显示在底部安全区域（Y=222）
             POINT_COLOR = WHITE;
-            LCD_Fill(5, 65, 120, 85, WHITE);
+            LCD_Fill(5, 222, 315, 239, WHITE);
             POINT_COLOR = RED;
-            LCD_ShowString(5, 65, 80, 20, 16, (uint8_t *)"Fine:");
-            LCD_ShowNum(45, 65, freq / 1000, 3, 16);
-            LCD_ShowString(70, 65, 40, 20, 16, (uint8_t *)"kHz");
+            LCD_ShowString(5, 222, 60, 16, 12, (uint8_t *)"Fine:");
+            LCD_ShowNum(35, 222, freq / 1000, 3, 12);
+            LCD_ShowString(60, 222, 30, 16, 12, (uint8_t *)"kHz");
 
-            // 百分比显示在标题右侧，不与STOP/DONE重叠
-            POINT_COLOR = WHITE;
-            LCD_Fill(120, 5, 200, 25, WHITE);
+            // 百分比
             POINT_COLOR = GREEN;
-            LCD_ShowNum(140, 5, (uint8_t)(50 + (float)(sweep_i+1) / FINE_POINTS * 50), 3, 16);
-            LCD_ShowString(170, 5, 20, 20, 16, (uint8_t *)"%");
+            LCD_ShowNum(100, 222, (uint8_t)(50 + (float)(sweep_i+1) / FINE_POINTS * 50), 3, 12);
+            LCD_ShowString(125, 222, 20, 16, 12, (uint8_t *)"%");
 
             sweep_i++;
         }
@@ -542,9 +587,12 @@ void Page1_SweepTask(void)
             HAL_Delay(AD637_SETTLE_MS);
             uint16_t val = ReadAD637();
 
-            // 归一化到200：相对于粗扫最大值，使曲线充满整个Y轴
-            uint16_t divisor = (coarse_max > 0) ? coarse_max : 1;
-            uint16_t norm = (uint16_t)((uint32_t)val * 200 / divisor);
+            // 计算实际放大倍数 Av = val / ui_ref（单点）
+            float current_av = (float)val / ui_ref;
+
+            // 归一化到200：相对于最大放大倍数 av_max，使曲线充满整个Y轴
+            float av_divisor = (av_max > 0.001f) ? av_max : 1.0f;
+            uint16_t norm = (uint16_t)(current_av * 200.0f / av_divisor);
             if(norm > 200) norm = 200;
 
             // 画当前点（红色）
@@ -575,48 +623,52 @@ void Page1_SweepTask(void)
             // 保存当前归一化值供下次连线用
             draw_val_norm_prev = norm;
 
-            // 显示进度
+            // 画图进度显示在底部安全区域（Y=222，不遮挡曲线）
             POINT_COLOR = WHITE;
-            LCD_Fill(5, 85, 120, 105, WHITE);
+            LCD_Fill(5, 222, 315, 239, WHITE);
             POINT_COLOR = RED;
-            LCD_ShowString(5, 85, 80, 20, 16, (uint8_t *)"Draw:");
-            LCD_ShowNum(45, 85, freq / 1000, 3, 16);
-            LCD_ShowString(70, 85, 40, 20, 16, (uint8_t *)"kHz");
+            LCD_ShowString(5, 222, 60, 16, 12, (uint8_t *)"Draw:");
+            LCD_ShowNum(35, 222, freq / 1000, 3, 12);
+            LCD_ShowString(60, 222, 30, 16, 12, (uint8_t *)"kHz");
 
-            POINT_COLOR = WHITE;
-            LCD_Fill(120, 5, 200, 25, WHITE);
             POINT_COLOR = GREEN;
-            LCD_ShowNum(120, 5, (uint8_t)((float)(sweep_i+1) / DRAW_POINTS * 100), 3, 16);
-            LCD_ShowString(150, 5, 20, 20, 16, (uint8_t *)"%");
+            LCD_ShowNum(100, 222, (uint8_t)((float)(sweep_i+1) / DRAW_POINTS * 100), 3, 12);
+            LCD_ShowString(125, 222, 20, 16, 12, (uint8_t *)"%");
 
             sweep_i++;
         }
         else
         {
-            // 清除进度显示
+            // 清除底部进度显示，显示最终结果（不遮挡曲线）
             POINT_COLOR = WHITE;
-            LCD_Fill(5, 85, 120, 105, WHITE);
-            LCD_Fill(120, 5, 200, 25, WHITE);
+            LCD_Fill(5, 222, 315, 239, WHITE);
 
-            // 清除旧结果区域
-            POINT_COLOR = WHITE;
-            LCD_Fill(5, 25, 160, 85, WHITE);
-
-            // 显示结果
+            // 显示结果（底部安全区域 Y=222, 12号字体）
+            // Av_max（通带最大放大倍数）
             POINT_COLOR = RED;
-            LCD_ShowString(5, 25, 100, 20, 16, (uint8_t *)"MAX=");
-            LCD_ShowNum(45, 25, coarse_max, 4, 16);
+            LCD_ShowString(5, 222, 30, 16, 12, (uint8_t *)"Av=");
+            {
+                uint32_t av_int = (uint32_t)(av_max);
+                uint32_t av_dec = (uint32_t)(av_max * 10) % 10;
+                LCD_ShowNum(30, 222, av_int, 3, 12);
+                LCD_ShowString(55, 222, 10, 16, 12, (uint8_t *)".");
+                LCD_ShowNum(60, 222, av_dec, 1, 12);
+            }
 
-            LCD_ShowString(5, 45, 100, 20, 16, (uint8_t *)"3dB=");
-            LCD_ShowNum(45, 45, value_3db, 4, 16);
+            // -3dB放大倍数对应的ADC值
+            POINT_COLOR = BLUE;
+            LCD_ShowString(80, 222, 40, 16, 12, (uint8_t *)"3dB=");
+            LCD_ShowNum(110, 222, value_3db, 4, 12);
 
-            LCD_ShowString(5, 65, 100, 20, 16, (uint8_t *)"fH=");
+            // 上限频率 fH
+            POINT_COLOR = RED;
+            LCD_ShowString(155, 222, 30, 16, 12, (uint8_t *)"fH=");
             if(FH > 100000 && FH < 120000)
             {
                 FH += 25000;
             }
-            LCD_ShowNum(35, 65, FH, 5, 16);
-            LCD_ShowString(75, 65, 40, 20, 16, (uint8_t *)"Hz");
+            LCD_ShowNum(175, 222, FH, 5, 12);
+            LCD_ShowString(215, 222, 30, 16, 12, (uint8_t *)"Hz");
 
             // 恢复1kHz点频输出
             AD9954_Set_Fre(1000.0);
@@ -755,18 +807,20 @@ void Page2_Update(void)
         p2_adc1_low = (uint16_t)LimitFilter((int)(sum1 / 8), &last_p2_adc1_low, 20);
         p2_adc2_low = (uint16_t)LimitFilter((int)(sum2 / 8), &last_p2_adc2_low, 20);
 
-        // 测ADC3
+        // 测ADC3 (扫描模式：IN4=交流, IN5=直流)
+        // 注意：Start只调一次，连续循环读两个通道，最后Stop
         {
             uint32_t sum_ac = 0, sum_dc = 0;
             #define P2_SAMPLE_CNT 12
+            HAL_ADC_Start(&hadc3);
             for(int i = 0; i < P2_SAMPLE_CNT; i++)
             {
-                HAL_ADC_Start(&hadc3);
-                HAL_ADC_PollForConversion(&hadc3, 10);
+                HAL_ADC_PollForConversion(&hadc3, 10);   // 等IN4(交流)
                 sum_ac += (uint16_t)HAL_ADC_GetValue(&hadc3);
-                HAL_ADC_PollForConversion(&hadc3, 10);
+                HAL_ADC_PollForConversion(&hadc3, 10);   // 等IN5(AD637直流)
                 sum_dc += (uint16_t)HAL_ADC_GetValue(&hadc3);
             }
+            HAL_ADC_Stop(&hadc3);
             p2_adc3_ac_low = (uint16_t)LimitFilter((int)(sum_ac / P2_SAMPLE_CNT), &last_p2_adc3_ac_low, 20);
             p2_adc3_dc_low = (uint16_t)LimitFilter((int)(sum_dc / P2_SAMPLE_CNT), &last_p2_adc3_dc_low, 20);
             #undef P2_SAMPLE_CNT
@@ -794,18 +848,19 @@ void Page2_Update(void)
         p2_adc1_high = (uint16_t)LimitFilter((int)(sum1 / 8), &last_p2_adc1_high, 20);
         p2_adc2_high = (uint16_t)LimitFilter((int)(sum2 / 8), &last_p2_adc2_high, 20);
 
-        // 测ADC3
+        // 测ADC3 (扫描模式：IN4=交流, IN5=直流)
         {
             uint32_t sum_ac = 0, sum_dc = 0;
             #define P2_SAMPLE_CNT 12
+            HAL_ADC_Start(&hadc3);
             for(int i = 0; i < P2_SAMPLE_CNT; i++)
             {
-                HAL_ADC_Start(&hadc3);
-                HAL_ADC_PollForConversion(&hadc3, 10);
+                HAL_ADC_PollForConversion(&hadc3, 10);   // 等IN4(交流)
                 sum_ac += (uint16_t)HAL_ADC_GetValue(&hadc3);
-                HAL_ADC_PollForConversion(&hadc3, 10);
+                HAL_ADC_PollForConversion(&hadc3, 10);   // 等IN5(AD637直流)
                 sum_dc += (uint16_t)HAL_ADC_GetValue(&hadc3);
             }
+            HAL_ADC_Stop(&hadc3);
             p2_adc3_ac_high = (uint16_t)LimitFilter((int)(sum_ac / P2_SAMPLE_CNT), &last_p2_adc3_ac_high, 20);
             p2_adc3_dc_high = (uint16_t)LimitFilter((int)(sum_dc / P2_SAMPLE_CNT), &last_p2_adc3_dc_high, 20);
             #undef P2_SAMPLE_CNT

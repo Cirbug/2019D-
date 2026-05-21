@@ -183,9 +183,9 @@ void Page0_Init(void)
     POINT_COLOR = GRAY;
     LCD_ShowString(170, 35, 140, 22, 16, (uint8_t *)"ADC1(Us):");
     LCD_ShowString(170, 58, 140, 22, 16, (uint8_t *)"ADC2(Ui):");
-    LCD_ShowString(170, 81, 140, 22, 16, (uint8_t *)"ADC3(Uo_load):");
-	LCD_ShowString(170, 104, 140, 22, 16, (uint8_t *)"ADC3(Uo_open):");
-	LCD_ShowString(170, 127, 140, 22, 16, (uint8_t *)"ADC3(Uo_DC):");
+    LCD_ShowString(170, 81, 140, 22, 16, (uint8_t *)"ADC3(load):");
+	LCD_ShowString(170, 104, 140, 22, 16, (uint8_t *)"ADC3(open):");
+	LCD_ShowString(170, 127, 140, 22, 16, (uint8_t *)"ADC3(DC):");
 
     // --- 底部按键提示 ---
     POINT_COLOR = RED;
@@ -245,17 +245,17 @@ void Page0_Update(void)
     // === ADC原始值 ===
     POINT_COLOR = GRAY;
     // 清除旧值
-    LCD_Fill(280, 35, 315, 55, WHITE);
-    LCD_Fill(280, 58, 315, 78, WHITE);
-    LCD_Fill(280, 81, 315, 101, WHITE);
-    LCD_Fill(280, 104, 315, 124, WHITE);
-    LCD_Fill(280, 127, 315, 147, WHITE);
+    LCD_Fill(260, 35, 315, 55, WHITE);
+    LCD_Fill(260, 58, 315, 78, WHITE);
+    LCD_Fill(260, 81, 315, 101, WHITE);
+    LCD_Fill(260, 104, 315, 124, WHITE);
+    LCD_Fill(260, 127, 315, 147, WHITE);
     // 显示新值
-    LCD_ShowNum(280, 35, adc1_val, 4, 16);
-    LCD_ShowNum(280, 58, adc2_val, 4, 16);
-    LCD_ShowNum(280, 81, adc3_val1, 4, 16);
-	LCD_ShowNum(280, 104, adc3_val2, 4, 16);
-	LCD_ShowNum(280, 127, adc3_valDC, 4, 16);
+    LCD_ShowNum(260, 35, adc1_val, 4, 16);
+    LCD_ShowNum(260, 58, adc2_val, 4, 16);
+    LCD_ShowNum(260, 81, adc3_val1, 4, 16);
+	LCD_ShowNum(260, 104, adc3_val2, 4, 16);
+	LCD_ShowNum(260, 127, adc3_valDC, 4, 16);
 }
 
 // ============================================================
@@ -336,14 +336,27 @@ void Page1_Init(void)
     LCD_ShowString(GRAPH_X0 - 5, GRAPH_Y0 + 2, 20, 14, 12, (uint8_t *)"0");
 }
 
-// AD637转换时间：约10ms稳定到0.1%，这里等20ms确保稳定
-#define AD637_SETTLE_MS 20
+// AD637转换时间：约10ms稳定到0.1%，这里等50ms确保充分稳定
+#define AD637_SETTLE_MS 50
 
 // 读取ADC3的直流通道(IN5, PF7) = AD637输出的RMS直流电压
+// 先丢弃前2次不稳定读数，再取12次平均，有效降低噪声
 static uint16_t ReadAD637(void)
 {
     uint16_t val = 0;
-    #define AD637_AVG_CNT 8
+    
+    // 丢弃前2次不稳定采样
+    for(int d = 0; d < 2; d++)
+    {
+        HAL_ADC_Start(&hadc3);
+        HAL_ADC_PollForConversion(&hadc3, 10);
+        (void)HAL_ADC_GetValue(&hadc3);         // 丢弃IN4
+        HAL_ADC_PollForConversion(&hadc3, 10);
+        (void)HAL_ADC_GetValue(&hadc3);         // 丢弃IN5
+    }
+    
+    // 正式采样取平均
+    #define AD637_AVG_CNT 12
     for(int i = 0; i < AD637_AVG_CNT; i++)
     {
         HAL_ADC_Start(&hadc3);
@@ -353,7 +366,7 @@ static uint16_t ReadAD637(void)
         val += HAL_ADC_GetValue(&hadc3);
     }
     #undef AD637_AVG_CNT
-    return (uint16_t)LimitFilter((int)(val / 8), &last_ad637_val, 20);
+    return (uint16_t)(val / 12);
 }
 
 // ============================================================
@@ -408,6 +421,7 @@ void Page1_SweepTask(void)
             AD9954_Set_Fre((float)freq);
             HAL_Delay(AD637_SETTLE_MS);
             coarse_val[sweep_i] = ReadAD637();
+            printf("Coarse[%d]: F=%lu ADC=%u\r\n", sweep_i, (unsigned long)freq, (unsigned int)coarse_val[sweep_i]);
 
             if(coarse_val[sweep_i] > coarse_max)
             {
@@ -436,6 +450,7 @@ void Page1_SweepTask(void)
         {
             // 粗扫完成
             freq_in_max = COARSE_START + coarse_max_idx * COARSE_STEP;
+            printf("Coarse done: MAX=%u at Fmax=%lu\r\n", (unsigned int)coarse_max, (unsigned long)freq_in_max);
 
             // 清除进度显示
             POINT_COLOR = WHITE;
@@ -471,6 +486,7 @@ void Page1_SweepTask(void)
             AD9954_Set_Fre((float)freq);
             HAL_Delay(AD637_SETTLE_MS);
             fine_val[sweep_i] = ReadAD637();
+            printf("Fine[%d]: F=%lu ADC=%u\r\n", sweep_i, (unsigned long)freq, (unsigned int)fine_val[sweep_i]);
 
             // 显示进度（在粗扫结果下方，避免重叠）
             POINT_COLOR = WHITE;
@@ -526,14 +542,15 @@ void Page1_SweepTask(void)
             HAL_Delay(AD637_SETTLE_MS);
             uint16_t val = ReadAD637();
 
-            // 归一化到200
-            uint16_t norm = (uint16_t)((uint32_t)val * 200 / 4095);
+            // 归一化到200：相对于粗扫最大值，使曲线充满整个Y轴
+            uint16_t divisor = (coarse_max > 0) ? coarse_max : 1;
+            uint16_t norm = (uint16_t)((uint32_t)val * 200 / divisor);
             if(norm > 200) norm = 200;
 
             // 画当前点（红色）
             POINT_COLOR = RED;
             uint16_t x = GRAPH_X0 + sweep_i;
-            uint16_t y = GRAPH_Y0 - (norm + 20);
+            uint16_t y = GRAPH_Y1 + 200 - norm;
             if(y < GRAPH_Y1) y = GRAPH_Y1;
             if(y > GRAPH_Y0) y = GRAPH_Y0;
 
@@ -546,11 +563,14 @@ void Page1_SweepTask(void)
             {
                 // 从上一个点连线到当前点
                 uint16_t x_prev = GRAPH_X0 + (sweep_i - 1);
-                uint16_t y_prev = GRAPH_Y0 - (draw_val_norm_prev + 20);
+                uint16_t y_prev = GRAPH_Y1 + 200 - draw_val_norm_prev;
                 if(y_prev < GRAPH_Y1) y_prev = GRAPH_Y1;
                 if(y_prev > GRAPH_Y0) y_prev = GRAPH_Y0;
                 LCD_DrawLine(x_prev, y_prev, x, y);
             }
+
+            // 串口调试：输出频率和原始ADC值
+            printf("F=%lu, ADC=%u, Norm=%u\r\n", (unsigned long)freq, (unsigned int)val, (unsigned int)norm);
 
             // 保存当前归一化值供下次连线用
             draw_val_norm_prev = norm;
@@ -1259,10 +1279,17 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-int fputc(int ch, FILE *f)
+// printf重定向到UART1（Newlib-nano，通过syscalls.c中的_write调用）
+int __io_putchar(int ch)
 {
   HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, 0xFFFF);
   return ch;
+}
+
+// Keil MDK-ARM兼容（部分工具链用fputc）
+int fputc(int ch, FILE *f)
+{
+  return __io_putchar(ch);
 }
 /* USER CODE END 4 */
 

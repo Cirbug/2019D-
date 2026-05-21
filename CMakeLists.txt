@@ -44,7 +44,12 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
+    # User application sources
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/lcd.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/filtering.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/AD9954.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/delay.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/fft.c
 )
 
 # Add include paths

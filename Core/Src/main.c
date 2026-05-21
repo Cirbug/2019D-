@@ -106,6 +106,22 @@ static uint16_t value_3db = 0;
 static uint16_t draw_val[280];
 static uint32_t FH = 0;
 static uint16_t draw_val_norm_prev = 0;  // 边扫边画时保存上一个归一化值
+
+// ======================= 限幅滤波last值 =======================
+static int last_adc1_val = 0;
+static int last_adc2_val = 0;
+static int last_adc3_val1 = 0;
+static int last_adc3_val2 = 0;
+static int last_adc3_valDC = 0;
+static int last_ad637_val = 0;
+static int last_p2_adc1_low = 0;
+static int last_p2_adc2_low = 0;
+static int last_p2_adc3_ac_low = 0;
+static int last_p2_adc3_dc_low = 0;
+static int last_p2_adc1_high = 0;
+static int last_p2_adc2_high = 0;
+static int last_p2_adc3_ac_high = 0;
+static int last_p2_adc3_dc_high = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -334,10 +350,10 @@ static uint16_t ReadAD637(void)
         HAL_ADC_PollForConversion(&hadc3, 10); // 等IN4(交流)
         (void)HAL_ADC_GetValue(&hadc3);         // 丢弃IN4
         HAL_ADC_PollForConversion(&hadc3, 10); // 等IN5(AD637直流)
-        val += LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2);
+        val += HAL_ADC_GetValue(&hadc3);
     }
     #undef AD637_AVG_CNT
-    return val / 8;
+    return (uint16_t)LimitFilter((int)(val / 8), &last_ad637_val, 20);
 }
 
 // ============================================================
@@ -711,13 +727,13 @@ void Page2_Update(void)
         {
             HAL_ADC_Start(&hadc1);
             HAL_Delay(1);
-            sum1 += LimitingFilter((int)HAL_ADC_GetValue(&hadc1), 0);
+            sum1 += HAL_ADC_GetValue(&hadc1);
             HAL_ADC_Start(&hadc2);
             HAL_Delay(1);
-            sum2 += LimitingFilter((int)HAL_ADC_GetValue(&hadc2), 1);
+            sum2 += HAL_ADC_GetValue(&hadc2);
         }
-        p2_adc1_low = (uint16_t)(sum1 / 8);
-        p2_adc2_low = (uint16_t)(sum2 / 8);
+        p2_adc1_low = (uint16_t)LimitFilter((int)(sum1 / 8), &last_p2_adc1_low, 20);
+        p2_adc2_low = (uint16_t)LimitFilter((int)(sum2 / 8), &last_p2_adc2_low, 20);
 
         // 测ADC3
         {
@@ -727,12 +743,12 @@ void Page2_Update(void)
             {
                 HAL_ADC_Start(&hadc3);
                 HAL_ADC_PollForConversion(&hadc3, 10);
-                sum_ac += (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2);
+                sum_ac += (uint16_t)HAL_ADC_GetValue(&hadc3);
                 HAL_ADC_PollForConversion(&hadc3, 10);
-                sum_dc += (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2);
+                sum_dc += (uint16_t)HAL_ADC_GetValue(&hadc3);
             }
-            p2_adc3_ac_low = (uint16_t)(sum_ac / P2_SAMPLE_CNT);
-            p2_adc3_dc_low = (uint16_t)(sum_dc / P2_SAMPLE_CNT);
+            p2_adc3_ac_low = (uint16_t)LimitFilter((int)(sum_ac / P2_SAMPLE_CNT), &last_p2_adc3_ac_low, 20);
+            p2_adc3_dc_low = (uint16_t)LimitFilter((int)(sum_dc / P2_SAMPLE_CNT), &last_p2_adc3_dc_low, 20);
             #undef P2_SAMPLE_CNT
         }
 
@@ -750,13 +766,13 @@ void Page2_Update(void)
         {
             HAL_ADC_Start(&hadc1);
             HAL_Delay(1);
-            sum1 += LimitingFilter((int)HAL_ADC_GetValue(&hadc1), 0);
+            sum1 += HAL_ADC_GetValue(&hadc1);
             HAL_ADC_Start(&hadc2);
             HAL_Delay(1);
-            sum2 += LimitingFilter((int)HAL_ADC_GetValue(&hadc2), 1);
+            sum2 += HAL_ADC_GetValue(&hadc2);
         }
-        p2_adc1_high = (uint16_t)(sum1 / 8);
-        p2_adc2_high = (uint16_t)(sum2 / 8);
+        p2_adc1_high = (uint16_t)LimitFilter((int)(sum1 / 8), &last_p2_adc1_high, 20);
+        p2_adc2_high = (uint16_t)LimitFilter((int)(sum2 / 8), &last_p2_adc2_high, 20);
 
         // 测ADC3
         {
@@ -766,12 +782,12 @@ void Page2_Update(void)
             {
                 HAL_ADC_Start(&hadc3);
                 HAL_ADC_PollForConversion(&hadc3, 10);
-                sum_ac += (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2);
+                sum_ac += (uint16_t)HAL_ADC_GetValue(&hadc3);
                 HAL_ADC_PollForConversion(&hadc3, 10);
-                sum_dc += (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2);
+                sum_dc += (uint16_t)HAL_ADC_GetValue(&hadc3);
             }
-            p2_adc3_ac_high = (uint16_t)(sum_ac / P2_SAMPLE_CNT);
-            p2_adc3_dc_high = (uint16_t)(sum_dc / P2_SAMPLE_CNT);
+            p2_adc3_ac_high = (uint16_t)LimitFilter((int)(sum_ac / P2_SAMPLE_CNT), &last_p2_adc3_ac_high, 20);
+            p2_adc3_dc_high = (uint16_t)LimitFilter((int)(sum_dc / P2_SAMPLE_CNT), &last_p2_adc3_dc_high, 20);
             #undef P2_SAMPLE_CNT
         }
 
@@ -904,7 +920,7 @@ int main(void)
     ;
     AD9954_Init();
     AD9954_Set_Fre(1000.0);  //频率
-    AD9954_Set_Amp(5000);     //幅度1200
+    AD9954_Set_Amp(1200);     //幅度1200
     AD9954_Set_Phase(0);     //相位
 
     // LCD
@@ -999,14 +1015,14 @@ int main(void)
                 {
                     HAL_ADC_Start(&hadc1);
                     HAL_Delay(1);
-                    sum1 += LimitingFilter((int)HAL_ADC_GetValue(&hadc1), 0);
+                    sum1 += HAL_ADC_GetValue(&hadc1);
                     
                     HAL_ADC_Start(&hadc2);
                     HAL_Delay(1);
-                    sum2 += LimitingFilter((int)HAL_ADC_GetValue(&hadc2), 1);
+                    sum2 += HAL_ADC_GetValue(&hadc2);
                 }
-                adc1_val = (uint16_t)(sum1 / 8);
-                adc2_val = (uint16_t)(sum2 / 8);
+                adc1_val = (uint16_t)LimitFilter((int)(sum1 / 8), &last_adc1_val, 20);
+                adc2_val = (uint16_t)LimitFilter((int)(sum2 / 8), &last_adc2_val, 20);
 
                 // 先吸合继电器（接负载），测带载U_load
                 HAL_GPIO_WritePin(RELAY_GPIO_PORT, RELAY_GPIO_PIN, GPIO_PIN_SET);
@@ -1025,10 +1041,10 @@ int main(void)
                     {
                         // 等待第1通道(Rank1: IN4)转换完成
                         HAL_ADC_PollForConversion(&hadc3, 10);
-                        samples[i] = (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2); // IN4 交流
+                        samples[i] = (uint16_t)HAL_ADC_GetValue(&hadc3); // IN4 交流
                         // 等待第2通道(Rank2: IN5)转换完成
                         HAL_ADC_PollForConversion(&hadc3, 10);
-                        samples_dc[i] = (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2); // IN5 直流
+                        samples_dc[i] = (uint16_t)HAL_ADC_GetValue(&hadc3); // IN5 直流
                     }
                     // 冒泡排序 (交流)
                     for(int i = 0; i < STABLE_SAMPLE_CNT - 1; i++)
@@ -1068,7 +1084,8 @@ int main(void)
                     #undef STABLE_SAMPLE_CNT
                 }
                 adc3_val = u_load;
-                adc3_val1 = adc3_val;  // Uo1 = 带载
+                adc3_val1 = (uint16_t)LimitFilter((int)adc3_val, &last_adc3_val1, 20);  // Uo1 = 带载
+                adc3_valDC = (uint16_t)LimitFilter((int)adc3_valDC, &last_adc3_valDC, 20);
 
                 // 输入电阻 Rin = R_series * Uin / (Us - Uin)
                 {
@@ -1102,10 +1119,10 @@ int main(void)
                     {
                         // 等待第1通道(Rank1: IN4)转换完成
                         HAL_ADC_PollForConversion(&hadc3, 10);
-                        samples[i] = (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2); // IN4 交流
+                        samples[i] = (uint16_t)HAL_ADC_GetValue(&hadc3); // IN4 交流
                         // 等待第2通道(Rank2: IN5)转换完成
                         HAL_ADC_PollForConversion(&hadc3, 10);
-                        samples_dc[i] = (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2); // IN5 直流
+                        samples_dc[i] = (uint16_t)HAL_ADC_GetValue(&hadc3); // IN5 直流
                     }
                     // 冒泡排序 (交流)
                     for(int i = 0; i < STABLE_SAMPLE_CNT - 1; i++)
@@ -1144,7 +1161,7 @@ int main(void)
                     adc3_valDC = (uint16_t)(sum_dc / 30);
                     #undef STABLE_SAMPLE_CNT
                 }
-                adc3_val2 = uo_open_value;  // Uo2 = 空载
+                adc3_val2 = (uint16_t)LimitFilter((int)uo_open_value, &last_adc3_val2, 20);  // Uo2 = 空载
 
                 // 放大倍数 Av = Uo_open / Uin
                 if(adc2_val > 50 && uo_open_value > 20)

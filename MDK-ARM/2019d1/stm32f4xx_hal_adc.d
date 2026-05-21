@@ -8,10 +8,10 @@
   ..\Drivers\CMSIS\Device\ST\STM32F4xx\Include\stm32f407xx.h \
   ..\Drivers\CMSIS\Include\core_cm4.h \
   F:\Keil\ v5\ARM\ARMCLANG\include\stdint.h \
-  D:\2019d\2019D_1_V3.0.1\2019d1\Drivers\CMSIS\Include\cmsis_version.h \
-  D:\2019d\2019D_1_V3.0.1\2019d1\Drivers\CMSIS\Include\cmsis_compiler.h \
-  D:\2019d\2019D_1_V3.0.1\2019d1\Drivers\CMSIS\Include\cmsis_armclang.h \
-  D:\2019d\2019D_1_V3.0.1\2019d1\Drivers\CMSIS\Include\mpu_armv7.h \
+  D:\git\2019d\2019d1\Drivers\CMSIS\Include\cmsis_version.h \
+  D:\git\2019d\2019d1\Drivers\CMSIS\Include\cmsis_compiler.h \
+  D:\git\2019d\2019d1\Drivers\CMSIS\Include\cmsis_armclang.h \
+  D:\git\2019d\2019d1\Drivers\CMSIS\Include\mpu_armv7.h \
   ..\Drivers\CMSIS\Device\ST\STM32F4xx\Include\system_stm32f4xx.h \
   ..\Drivers\STM32F4xx_HAL_Driver\Inc\Legacy\stm32_hal_legacy.h \
   F:\Keil\ v5\ARM\ARMCLANG\include\stddef.h \

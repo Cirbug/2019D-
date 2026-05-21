@@ -134,6 +134,36 @@ int LAverageFilter(ADC_HandleTypeDef *hadc)
     return sum / M;
 }
 
+/**
+ * @brief  限幅滤波（阈值20）
+ *         每个ADC独立维护上一次有效值
+ *         若当前值与上次有效值之差超过阈值，则丢弃当前值，返回上次有效值
+ * @param  newValue: 当前ADC采样值
+ * @param  adcId: ADC编号（0=ADC1, 1=ADC2, 2=ADC3）
+ * @retval 滤波后的值
+ */
+#define LIMIT_THRESHOLD 50
+
+static int last_valid[3] = {0};
+static uint8_t lim_init[3] = {0};
+
+int LimitingFilter(int newValue, uint8_t adcId)
+{
+    if (adcId > 2) return newValue;
+    
+    if (!lim_init[adcId]) {
+        last_valid[adcId] = newValue;
+        lim_init[adcId] = 1;
+        return newValue;
+    }
+    
+    if (abs(newValue - last_valid[adcId]) <= LIMIT_THRESHOLD) {
+        last_valid[adcId] = newValue;
+    }
+    
+    return last_valid[adcId];
+}
+
 //卡尔曼滤波（支持多ADC）
 #define KALMAN_ADC_NUM 3
 typedef struct {

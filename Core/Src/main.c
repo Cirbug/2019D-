@@ -334,7 +334,7 @@ static uint16_t ReadAD637(void)
         HAL_ADC_PollForConversion(&hadc3, 10); // 等IN4(交流)
         (void)HAL_ADC_GetValue(&hadc3);         // 丢弃IN4
         HAL_ADC_PollForConversion(&hadc3, 10); // 等IN5(AD637直流)
-        val += HAL_ADC_GetValue(&hadc3);
+        val += LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2);
     }
     #undef AD637_AVG_CNT
     return val / 8;
@@ -711,10 +711,10 @@ void Page2_Update(void)
         {
             HAL_ADC_Start(&hadc1);
             HAL_Delay(1);
-            sum1 += HAL_ADC_GetValue(&hadc1);
+            sum1 += LimitingFilter((int)HAL_ADC_GetValue(&hadc1), 0);
             HAL_ADC_Start(&hadc2);
             HAL_Delay(1);
-            sum2 += HAL_ADC_GetValue(&hadc2);
+            sum2 += LimitingFilter((int)HAL_ADC_GetValue(&hadc2), 1);
         }
         p2_adc1_low = (uint16_t)(sum1 / 8);
         p2_adc2_low = (uint16_t)(sum2 / 8);
@@ -727,9 +727,9 @@ void Page2_Update(void)
             {
                 HAL_ADC_Start(&hadc3);
                 HAL_ADC_PollForConversion(&hadc3, 10);
-                sum_ac += (uint16_t)HAL_ADC_GetValue(&hadc3);
+                sum_ac += (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2);
                 HAL_ADC_PollForConversion(&hadc3, 10);
-                sum_dc += (uint16_t)HAL_ADC_GetValue(&hadc3);
+                sum_dc += (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2);
             }
             p2_adc3_ac_low = (uint16_t)(sum_ac / P2_SAMPLE_CNT);
             p2_adc3_dc_low = (uint16_t)(sum_dc / P2_SAMPLE_CNT);
@@ -750,10 +750,10 @@ void Page2_Update(void)
         {
             HAL_ADC_Start(&hadc1);
             HAL_Delay(1);
-            sum1 += HAL_ADC_GetValue(&hadc1);
+            sum1 += LimitingFilter((int)HAL_ADC_GetValue(&hadc1), 0);
             HAL_ADC_Start(&hadc2);
             HAL_Delay(1);
-            sum2 += HAL_ADC_GetValue(&hadc2);
+            sum2 += LimitingFilter((int)HAL_ADC_GetValue(&hadc2), 1);
         }
         p2_adc1_high = (uint16_t)(sum1 / 8);
         p2_adc2_high = (uint16_t)(sum2 / 8);
@@ -766,9 +766,9 @@ void Page2_Update(void)
             {
                 HAL_ADC_Start(&hadc3);
                 HAL_ADC_PollForConversion(&hadc3, 10);
-                sum_ac += (uint16_t)HAL_ADC_GetValue(&hadc3);
+                sum_ac += (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2);
                 HAL_ADC_PollForConversion(&hadc3, 10);
-                sum_dc += (uint16_t)HAL_ADC_GetValue(&hadc3);
+                sum_dc += (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2);
             }
             p2_adc3_ac_high = (uint16_t)(sum_ac / P2_SAMPLE_CNT);
             p2_adc3_dc_high = (uint16_t)(sum_dc / P2_SAMPLE_CNT);
@@ -999,11 +999,11 @@ int main(void)
                 {
                     HAL_ADC_Start(&hadc1);
                     HAL_Delay(1);
-                    sum1 += HAL_ADC_GetValue(&hadc1);
+                    sum1 += LimitingFilter((int)HAL_ADC_GetValue(&hadc1), 0);
                     
                     HAL_ADC_Start(&hadc2);
                     HAL_Delay(1);
-                    sum2 += HAL_ADC_GetValue(&hadc2);
+                    sum2 += LimitingFilter((int)HAL_ADC_GetValue(&hadc2), 1);
                 }
                 adc1_val = (uint16_t)(sum1 / 8);
                 adc2_val = (uint16_t)(sum2 / 8);
@@ -1025,10 +1025,10 @@ int main(void)
                     {
                         // 等待第1通道(Rank1: IN4)转换完成
                         HAL_ADC_PollForConversion(&hadc3, 10);
-                        samples[i] = (uint16_t)HAL_ADC_GetValue(&hadc3); // IN4 交流
+                        samples[i] = (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2); // IN4 交流
                         // 等待第2通道(Rank2: IN5)转换完成
                         HAL_ADC_PollForConversion(&hadc3, 10);
-                        samples_dc[i] = (uint16_t)HAL_ADC_GetValue(&hadc3); // IN5 直流
+                        samples_dc[i] = (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2); // IN5 直流
                     }
                     // 冒泡排序 (交流)
                     for(int i = 0; i < STABLE_SAMPLE_CNT - 1; i++)
@@ -1102,10 +1102,10 @@ int main(void)
                     {
                         // 等待第1通道(Rank1: IN4)转换完成
                         HAL_ADC_PollForConversion(&hadc3, 10);
-                        samples[i] = (uint16_t)HAL_ADC_GetValue(&hadc3); // IN4 交流
+                        samples[i] = (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2); // IN4 交流
                         // 等待第2通道(Rank2: IN5)转换完成
                         HAL_ADC_PollForConversion(&hadc3, 10);
-                        samples_dc[i] = (uint16_t)HAL_ADC_GetValue(&hadc3); // IN5 直流
+                        samples_dc[i] = (uint16_t)LimitingFilter((int)HAL_ADC_GetValue(&hadc3), 2); // IN5 直流
                     }
                     // 冒泡排序 (交流)
                     for(int i = 0; i < STABLE_SAMPLE_CNT - 1; i++)

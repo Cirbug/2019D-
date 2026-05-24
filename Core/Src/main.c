@@ -58,6 +58,21 @@
 #define CH_SEL_GPIO_PORT    GPIOG
 #define CH_SEL_GPIO_PIN     GPIO_PIN_13
 
+// trigger3 (PG11) 与 trigger2 相反电平
+// trigger2低电平时 → trigger3高电平，trigger2高电平时 → trigger3低电平
+#define CH_SEL2_GPIO_PORT   GPIOG
+#define CH_SEL2_GPIO_PIN    GPIO_PIN_11
+
+// 同时设置 trigger2 和 trigger3（相反电平）的辅助宏
+#define SET_TRIGGER2(val)                              \
+    do {                                                \
+        HAL_GPIO_WritePin(CH_SEL_GPIO_PORT, CH_SEL_GPIO_PIN, (val));          \
+        if((val) == GPIO_PIN_RESET)                     \
+            HAL_GPIO_WritePin(CH_SEL2_GPIO_PORT, CH_SEL2_GPIO_PIN, GPIO_PIN_SET);   \
+        else                                            \
+            HAL_GPIO_WritePin(CH_SEL2_GPIO_PORT, CH_SEL2_GPIO_PIN, GPIO_PIN_RESET); \
+    } while(0)
+
 
 
 /* USER CODE END PD */
@@ -855,8 +870,8 @@ void Page2_Update(void)
     if(p2_mstep == 0)
     {
         // ===== 第1步：trigger2低电平(通道1直通)，测ADC1+ADC2+ADC3 =====
-        // 确保trigger2为低电平
-        HAL_GPIO_WritePin(CH_SEL_GPIO_PORT, CH_SEL_GPIO_PIN, GPIO_PIN_RESET);
+        // 确保trigger2为低电平（同时trigger3高电平）
+        SET_TRIGGER2(GPIO_PIN_RESET);
         HAL_Delay(200);  // 等待继电器稳定（缓慢切换）
 
         // 测ADC1+ADC2
@@ -897,7 +912,7 @@ void Page2_Update(void)
     else if(p2_mstep == 1)
     {
         // ===== 第2步：trigger2高电平(通道2分压)，测ADC1+ADC2+ADC3 =====
-        HAL_GPIO_WritePin(CH_SEL_GPIO_PORT, CH_SEL_GPIO_PIN, GPIO_PIN_SET);
+        SET_TRIGGER2(GPIO_PIN_SET);
         HAL_Delay(50);  // 等待继电器稳定
 
         // 测ADC1+ADC2
@@ -938,7 +953,7 @@ void Page2_Update(void)
     {
         // ===== 第3步：计算并显示 =====
         // 恢复trigger2为低电平（下次循环从低电平开始）
-        HAL_GPIO_WritePin(CH_SEL_GPIO_PORT, CH_SEL_GPIO_PIN, GPIO_PIN_RESET);
+        SET_TRIGGER2(GPIO_PIN_RESET);
 
         // ===== 显示ADC原始值（8个值），仅变化>20才刷新 =====
         #define P2_DISP_THRESHOLD 20
@@ -1090,8 +1105,8 @@ int main(void)
     POINT_COLOR = RED;
     BACK_COLOR = WHITE;
 
-    // trigger2 默认低电平（通道1：直通）
-    HAL_GPIO_WritePin(CH_SEL_GPIO_PORT, CH_SEL_GPIO_PIN, GPIO_PIN_RESET);
+    // trigger2 默认低电平（通道1：直通），trigger3高电平
+    SET_TRIGGER2(GPIO_PIN_RESET);
 
     // 默认界面0
     Page0_Init();
@@ -1139,18 +1154,18 @@ int main(void)
                 case 0:
                     // 界面0：trigger1(负载继电器)断开, trigger2(通道选择)低电平(通道1直通)
                     HAL_GPIO_WritePin(RELAY_GPIO_PORT, RELAY_GPIO_PIN, GPIO_PIN_RESET);
-                    HAL_GPIO_WritePin(CH_SEL_GPIO_PORT, CH_SEL_GPIO_PIN, GPIO_PIN_RESET);
+                    SET_TRIGGER2(GPIO_PIN_RESET);
                     Page0_Init();
                     break;
                 case 1:
                     // 界面1：trigger1(负载继电器)断开, trigger2(通道选择)低电平
                     HAL_GPIO_WritePin(RELAY_GPIO_PORT, RELAY_GPIO_PIN, GPIO_PIN_RESET);
-                    HAL_GPIO_WritePin(CH_SEL_GPIO_PORT, CH_SEL_GPIO_PIN, GPIO_PIN_RESET);
+                    SET_TRIGGER2(GPIO_PIN_RESET);
                     Page1_Init();
                     break;
                 case 2:
                     // 界面2：通道2（R1/R2分压）
-                    HAL_GPIO_WritePin(CH_SEL_GPIO_PORT, CH_SEL_GPIO_PIN, GPIO_PIN_SET);
+                    SET_TRIGGER2(GPIO_PIN_SET);
                     Page2_Init();
                     break;
             }

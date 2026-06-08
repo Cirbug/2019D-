@@ -63,13 +63,18 @@
 #define CH_SEL2_GPIO_PORT   GPIOG
 #define CH_SEL2_GPIO_PIN    GPIO_PIN_11
 
-// 同时设置 trigger2 和 trigger3（相反电平）的辅助宏
-#define SET_TRIGGER2(val)                              \
-    do {                                                \
+// trigger3G14 (PG14) 与 trigger2 相同电平
+#define CH_SEL3_GPIO_PORT   GPIOG
+#define CH_SEL3_GPIO_PIN    GPIO_PIN_14
+
+// 同时设置 trigger2(PG13)、trigger3(PG11 相反)、trigger3G14(PG14 相同) 的辅助宏
+#define SET_TRIGGER2(val)                                                      \
+    do {                                                                        \
         HAL_GPIO_WritePin(CH_SEL_GPIO_PORT, CH_SEL_GPIO_PIN, (val));          \
-        if((val) == GPIO_PIN_RESET)                     \
+        HAL_GPIO_WritePin(CH_SEL3_GPIO_PORT, CH_SEL3_GPIO_PIN, (val));        \
+        if((val) == GPIO_PIN_RESET)                                             \
             HAL_GPIO_WritePin(CH_SEL2_GPIO_PORT, CH_SEL2_GPIO_PIN, GPIO_PIN_SET);   \
-        else                                            \
+        else                                                                    \
             HAL_GPIO_WritePin(CH_SEL2_GPIO_PORT, CH_SEL2_GPIO_PIN, GPIO_PIN_RESET); \
     } while(0)
 

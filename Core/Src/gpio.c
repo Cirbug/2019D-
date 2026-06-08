@@ -58,7 +58,8 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, Back_Light_Pin|AD9954_PWR_Pin|trigger1_Pin|AD9954_RES_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOG, AD9954_UPD_Pin|trigger3_Pin|trigger2_Pin|AD9954_SDIO_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOG, AD9954_UPD_Pin|trigger3_Pin|trigger2_Pin|trigger3G14_Pin
+                          |AD9954_SDIO_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, AD9954_CS_Pin|AD9954_PS1_Pin|AD9954_OSK_Pin|AD9954_PS0_Pin, GPIO_PIN_RESET);
@@ -88,8 +89,10 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(Back_Light_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : AD9954_UPD_Pin trigger3_Pin trigger2_Pin AD9954_SDIO_Pin */
-  GPIO_InitStruct.Pin = AD9954_UPD_Pin|trigger3_Pin|trigger2_Pin|AD9954_SDIO_Pin;
+  /*Configure GPIO pins : AD9954_UPD_Pin trigger3_Pin trigger2_Pin trigger3G14_Pin
+                           AD9954_SDIO_Pin */
+  GPIO_InitStruct.Pin = AD9954_UPD_Pin|trigger3_Pin|trigger2_Pin|trigger3G14_Pin
+                          |AD9954_SDIO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;

@@ -89,6 +89,8 @@ void Error_Handler(void);
 #define trigger3_GPIO_Port GPIOG
 #define trigger2_Pin GPIO_PIN_13
 #define trigger2_GPIO_Port GPIOG
+#define trigger3G14_Pin GPIO_PIN_14
+#define trigger3G14_GPIO_Port GPIOG
 #define AD9954_SDIO_Pin GPIO_PIN_15
 #define AD9954_SDIO_GPIO_Port GPIOG
 #define AD9954_PWR_Pin GPIO_PIN_3

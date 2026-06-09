@@ -146,6 +146,11 @@ static int last_p2_adc1_high = 0;
 static int last_p2_adc2_high = 0;
 static int last_p2_adc3_ac_high = 0;
 static int last_p2_adc3_dc_high = 0;
+
+// ======================= 界面3：DDS手动频率控制 =======================
+static uint32_t page3_freq = 1000;         // 当前DDS频率，默认1kHz
+static uint16_t page3_adc3_ac = 0;         // ADC3 IN4 交流值
+static uint16_t page3_adc3_dc = 0;         // ADC3 IN5 AD637直流值
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -160,6 +165,8 @@ void Page1_SweepTask(void);  // 分步执行
 void Page2_Init(void);
 void Page2_StartMeasure(void);
 void Page2_Update(void);
+void Page3_Init(void);
+void Page3_Update(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -1058,6 +1065,110 @@ void Page2_Update(void)
         p2_mstep = 0;
     }
 }
+
+// ============================================================
+//  界面3：DDS 手动频率控制 (320x240)
+//  trigger1/2/3 全部低电平
+//  Key_UP: 频率+10kHz (1k~500k, 回绕到1k)
+// ============================================================
+void Page3_Init(void)
+{
+    LCD_Clear(WHITE);
+
+    // --- 标题 ---
+    POINT_COLOR = RED;
+    LCD_ShowString(5, 2, 200, 28, 24, (uint8_t *)"DDS Control");
+
+    // --- 频率显示 ---
+    POINT_COLOR = BLACK;
+    LCD_ShowString(5, 40, 80, 22, 16, (uint8_t *)"Freq:");
+
+    POINT_COLOR = BLUE;
+    if(page3_freq >= 1000)
+        LCD_ShowNum(60, 40, page3_freq / 1000, 5, 16);
+    else
+        LCD_ShowString(60, 40, 60, 22, 16, (uint8_t *)"---");
+    POINT_COLOR = BLACK;
+    LCD_ShowString(140, 40, 40, 22, 16, (uint8_t *)"kHz");
+
+    // --- ADC3 标签 ---
+    POINT_COLOR = GRAY;
+    LCD_ShowString(5, 75, 100, 22, 16, (uint8_t *)"ADC3ac:");
+    LCD_ShowString(5, 105, 100, 22, 16, (uint8_t *)"ADC3dc:");
+
+    POINT_COLOR = BLUE;
+    LCD_ShowString(80, 75, 80, 22, 16, (uint8_t *)"---");
+    LCD_ShowString(80, 105, 80, 22, 16, (uint8_t *)"---");
+
+    // --- 按键提示 ---
+    POINT_COLOR = RED;
+    LCD_ShowString(5, 218, 310, 20, 16, (uint8_t *)"Key_UP:+10k  Key0:Change");
+
+    // --- DDS 说明 ---
+    POINT_COLOR = BLACK;
+    LCD_ShowString(5, 150, 300, 22, 16, (uint8_t *)"1kHz ~ 500kHz, step=10kHz");
+
+    // 重置频率到1kHz并输出
+    page3_freq = 1000;
+    AD9954_Set_Fre(1000.0);
+    AD9954_Set_Amp(1200);
+}
+
+// ============================================================
+//  界面3：更新 ADC3 双通道显示
+// ============================================================
+void Page3_Update(void)
+{
+    static uint16_t last_disp_ac = 0xFFFF;
+    static uint16_t last_disp_dc = 0xFFFF;
+    #define P3_DISP_THRESHOLD 10
+
+    // 读 ADC3 (IN4=交流, IN5=AD637直流)
+    {
+        uint32_t sum_ac = 0, sum_dc = 0;
+        #define P3_AVG_CNT 8
+        HAL_ADC_Start(&hadc3);
+        for(int i = 0; i < P3_AVG_CNT; i++)
+        {
+            HAL_ADC_PollForConversion(&hadc3, 10);
+            sum_ac += (uint16_t)HAL_ADC_GetValue(&hadc3);
+            HAL_ADC_PollForConversion(&hadc3, 10);
+            sum_dc += (uint16_t)HAL_ADC_GetValue(&hadc3);
+        }
+        HAL_ADC_Stop(&hadc3);
+        page3_adc3_ac = (uint16_t)(sum_ac / P3_AVG_CNT);
+        page3_adc3_dc = (uint16_t)(sum_dc / P3_AVG_CNT);
+        #undef P3_AVG_CNT
+    }
+
+    // 刷新ADC3ac显示（变化>10才刷新）
+    {
+        int diff = (int)page3_adc3_ac - (int)last_disp_ac;
+        if(diff < 0) diff = -diff;
+        if(diff > P3_DISP_THRESHOLD)
+        {
+            LCD_Fill(80, 75, 160, 97, WHITE);
+            POINT_COLOR = BLUE;
+            LCD_ShowNum(80, 75, page3_adc3_ac, 4, 16);
+            last_disp_ac = page3_adc3_ac;
+        }
+    }
+
+    // 刷新ADC3dc显示（变化>10才刷新）
+    {
+        int diff = (int)page3_adc3_dc - (int)last_disp_dc;
+        if(diff < 0) diff = -diff;
+        if(diff > P3_DISP_THRESHOLD)
+        {
+            LCD_Fill(80, 105, 160, 127, WHITE);
+            POINT_COLOR = BLUE;
+            LCD_ShowNum(80, 105, page3_adc3_dc, 4, 16);
+            last_disp_dc = page3_adc3_dc;
+        }
+    }
+
+    #undef P3_DISP_THRESHOLD
+}
 /* USER CODE END 0 */
 
 /**
@@ -1134,7 +1245,7 @@ int main(void)
             if(current_page == 0) { measure_running = 0; HAL_GPIO_WritePin(RELAY_GPIO_PORT, RELAY_GPIO_PIN, GPIO_PIN_RESET); }
             if(current_page == 1) sweep_busy = 0;
             current_page++;
-            if(current_page > 2) current_page = 0;
+            if(current_page > 3) current_page = 0;
             page_changed = 1;
         }
 
@@ -1147,6 +1258,18 @@ int main(void)
                 case 0: Page0_StartMeasure(); break;
                 case 1: Page1_StartSweep();   break;
                 case 2: Page2_StartMeasure(); break;
+                case 3:
+                    // 界面3：频率+10kHz，超过500k回绕到1k
+                    page3_freq += 10000;
+                    if(page3_freq > 500000) page3_freq = 1000;
+                    AD9954_Set_Fre((float)page3_freq);
+                    // 更新频率显示
+                    {
+                        LCD_Fill(60, 40, 135, 62, WHITE);
+                        POINT_COLOR = BLUE;
+                        LCD_ShowNum(60, 40, page3_freq / 1000, 5, 16);
+                    }
+                    break;
             }
         }
 
@@ -1157,21 +1280,32 @@ int main(void)
             switch(current_page)
             {
                 case 0:
-                    // 界面0：trigger1(负载继电器)断开, trigger2(通道选择)低电平(通道1直通)
+                    // 界面0：trigger1断开, trigger2/3G14低, trigger3高
                     HAL_GPIO_WritePin(RELAY_GPIO_PORT, RELAY_GPIO_PIN, GPIO_PIN_RESET);
                     SET_TRIGGER2(GPIO_PIN_RESET);
+                    AD9954_Set_Fre(1000.0);  // 恢复1kHz
                     Page0_Init();
                     break;
                 case 1:
-                    // 界面1：trigger1(负载继电器)断开, trigger2(通道选择)低电平
+                    // 界面1：trigger1断开, trigger2/3G14低, trigger3高
                     HAL_GPIO_WritePin(RELAY_GPIO_PORT, RELAY_GPIO_PIN, GPIO_PIN_RESET);
                     SET_TRIGGER2(GPIO_PIN_RESET);
+                    AD9954_Set_Fre(1000.0);  // 恢复1kHz
                     Page1_Init();
                     break;
                 case 2:
                     // 界面2：通道2（R1/R2分压）
                     SET_TRIGGER2(GPIO_PIN_SET);
+                    AD9954_Set_Fre(1000.0);  // 恢复1kHz
                     Page2_Init();
+                    break;
+                case 3:
+                    // 界面3：四个trigger全低
+                    HAL_GPIO_WritePin(RELAY_GPIO_PORT, RELAY_GPIO_PIN, GPIO_PIN_RESET);
+                    HAL_GPIO_WritePin(CH_SEL_GPIO_PORT, CH_SEL_GPIO_PIN, GPIO_PIN_RESET);
+                    HAL_GPIO_WritePin(CH_SEL2_GPIO_PORT, CH_SEL2_GPIO_PIN, GPIO_PIN_RESET);
+                    HAL_GPIO_WritePin(CH_SEL3_GPIO_PORT, CH_SEL3_GPIO_PIN, GPIO_PIN_RESET);
+                    Page3_Init();
                     break;
             }
         }
@@ -1383,7 +1517,13 @@ int main(void)
         if(current_page == 2 && fault_running)
         {
             Page2_Update();
-            // 不在此加HAL_Delay，因为Page2_Update内部已通过mstep分步处理
+        }
+
+        // ========== 界面3：DDS手动频率控制 ==========
+        if(current_page == 3)
+        {
+            Page3_Update();
+            HAL_Delay(200);  // 更新周期稍长以降低ADC刷新过于频繁
         }
 
         HAL_Delay(10);

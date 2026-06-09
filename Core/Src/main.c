@@ -850,25 +850,30 @@ void Page2_Update(void)
         SET_TRIGGER2(GPIO_PIN_RESET);
         HAL_Delay(200);  // 等待继电器稳定（缓慢切换）
 
-        // 测ADC1+ADC2
+        // 测ADC1+ADC2（先Stop确保干净状态，再Start轮询读取）
         uint32_t sum1 = 0, sum2 = 0;
+        HAL_ADC_Stop(&hadc1);
+        HAL_ADC_Stop(&hadc2);
         for(int i = 0; i < 8; i++)
         {
             HAL_ADC_Start(&hadc1);
             HAL_Delay(1);
             sum1 += HAL_ADC_GetValue(&hadc1);
+            HAL_ADC_Stop(&hadc1);
             HAL_ADC_Start(&hadc2);
             HAL_Delay(1);
             sum2 += HAL_ADC_GetValue(&hadc2);
+            HAL_ADC_Stop(&hadc2);
         }
         p2_adc1_low = (uint16_t)(sum1 / 8);
         p2_adc2_low = (uint16_t)(sum2 / 8);
 
         // 测ADC3 (扫描模式：IN4=交流, IN5=直流)
-        // 注意：Start只调一次，连续循环读两个通道，最后Stop
+        // 注意：先Stop确保干净状态，再Start一次，连续轮询两个通道，最后Stop
         {
             uint32_t sum_ac = 0, sum_dc = 0;
             #define P2_SAMPLE_CNT 12
+            HAL_ADC_Stop(&hadc3);
             HAL_ADC_Start(&hadc3);
             for(int i = 0; i < P2_SAMPLE_CNT; i++)
             {
@@ -891,16 +896,20 @@ void Page2_Update(void)
         SET_TRIGGER2(GPIO_PIN_SET);
         HAL_Delay(50);  // 等待继电器稳定
 
-        // 测ADC1+ADC2
+        // 测ADC1+ADC2（先Stop确保干净状态，再Start轮询读取）
         uint32_t sum1 = 0, sum2 = 0;
+        HAL_ADC_Stop(&hadc1);
+        HAL_ADC_Stop(&hadc2);
         for(int i = 0; i < 8; i++)
         {
             HAL_ADC_Start(&hadc1);
             HAL_Delay(1);
             sum1 += HAL_ADC_GetValue(&hadc1);
+            HAL_ADC_Stop(&hadc1);
             HAL_ADC_Start(&hadc2);
             HAL_Delay(1);
             sum2 += HAL_ADC_GetValue(&hadc2);
+            HAL_ADC_Stop(&hadc2);
         }
         p2_adc1_high = (uint16_t)(sum1 / 8);
         p2_adc2_high = (uint16_t)(sum2 / 8);
@@ -909,6 +918,7 @@ void Page2_Update(void)
         {
             uint32_t sum_ac = 0, sum_dc = 0;
             #define P2_SAMPLE_CNT 12
+            HAL_ADC_Stop(&hadc3);
             HAL_ADC_Start(&hadc3);
             for(int i = 0; i < P2_SAMPLE_CNT; i++)
             {

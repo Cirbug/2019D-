@@ -247,120 +247,76 @@ void Page0_Init(void)
 // ============================================================
 void Page0_Update(void)
 {
-    // 保存上次显示的各ADC值
-    static uint16_t last_disp_adc1 = 0xFFFF;
-    static uint16_t last_disp_adc2 = 0xFFFF;
-    static uint16_t last_disp_adc3_1 = 0xFFFF;
-    static uint16_t last_disp_adc3_2 = 0xFFFF;
-    static uint16_t last_disp_adc3_dc = 0xFFFF;
+    // === ADC1(Us)（实时更新） ===
+    LCD_Fill(260, 35, 315, 55, WHITE);
+    POINT_COLOR = GRAY;
+    LCD_ShowNum(260, 35, adc1_val, 4, 16);
 
-    #define CHANGE_THRESHOLD 20
+    // === ADC2(Ui)（实时更新） ===
+    LCD_Fill(260, 58, 315, 78, WHITE);
+    POINT_COLOR = GRAY;
+    LCD_ShowNum(260, 58, adc2_val, 4, 16);
 
-    // === ADC1(Us) ===
-    UPDATE_IF_CHANGED(adc1_val, last_disp_adc1, CHANGE_THRESHOLD, {
-        LCD_Fill(260, 35, 315, 55, WHITE);
-        POINT_COLOR = GRAY;
-        LCD_ShowNum(260, 35, adc1_val, 4, 16);
-    });
+    // === ADC3(load)（实时更新） ===
+    LCD_Fill(260, 81, 315, 101, WHITE);
+    POINT_COLOR = GRAY;
+    LCD_ShowNum(260, 81, adc3_val1, 4, 16);
 
-    // === ADC2(Ui) ===
-    UPDATE_IF_CHANGED(adc2_val, last_disp_adc2, CHANGE_THRESHOLD, {
-        LCD_Fill(260, 58, 315, 78, WHITE);
-        POINT_COLOR = GRAY;
-        LCD_ShowNum(260, 58, adc2_val, 4, 16);
-    });
+    // === ADC3(open)（实时更新） ===
+    LCD_Fill(260, 104, 315, 124, WHITE);
+    POINT_COLOR = GRAY;
+    LCD_ShowNum(260, 104, adc3_val2, 4, 16);
 
-    // === ADC3(load) ===
-    UPDATE_IF_CHANGED(adc3_val1, last_disp_adc3_1, CHANGE_THRESHOLD, {
-        LCD_Fill(260, 81, 315, 101, WHITE);
-        POINT_COLOR = GRAY;
-        LCD_ShowNum(260, 81, adc3_val1, 4, 16);
-    });
+    // === ADC3(DC)（实时更新） ===
+    LCD_Fill(260, 127, 315, 147, WHITE);
+    POINT_COLOR = GRAY;
+    LCD_ShowNum(260, 127, adc3_valDC, 4, 16);
 
-    // === ADC3(open) ===
-    UPDATE_IF_CHANGED(adc3_val2, last_disp_adc3_2, CHANGE_THRESHOLD, {
-        LCD_Fill(260, 104, 315, 124, WHITE);
-        POINT_COLOR = GRAY;
-        LCD_ShowNum(260, 104, adc3_val2, 4, 16);
-    });
-
-    // === ADC3(DC) ===
-    UPDATE_IF_CHANGED(adc3_valDC, last_disp_adc3_dc, CHANGE_THRESHOLD, {
-        LCD_Fill(260, 127, 315, 147, WHITE);
-        POINT_COLOR = GRAY;
-        LCD_ShowNum(260, 127, adc3_valDC, 4, 16);
-    });
-
-    // === Rin, Rout, Av（计算结果，变化>20%才刷新） ===
-    static float last_disp_rin = -9999.0f;
-    static float last_disp_rout = -9999.0f;
-    static float last_disp_av = -9999.0f;
-
-    // Rin
+    // === Rin（实时更新） ===
     {
-        float diff = input_resistance - last_disp_rin;
-        if(diff < 0) diff = -diff;
-        if(last_disp_rin < -1000 || diff > 20.0f)
+        POINT_COLOR = WHITE;
+        LCD_ShowString(55, 35, 72, 22, 16, (uint8_t *)"       ");
+        POINT_COLOR = BLUE;
+        if(input_resistance >= 1000.0f)
+            LCD_ShowNum(55, 35, (uint32_t)(input_resistance), 4, 16);
+        else
         {
-            POINT_COLOR = WHITE;
-            LCD_ShowString(55, 35, 72, 22, 16, (uint8_t *)"       ");
-            POINT_COLOR = BLUE;
-            if(input_resistance >= 1000.0f)
-                LCD_ShowNum(55, 35, (uint32_t)(input_resistance), 4, 16);
-            else
-            {
-                uint32_t ri_int = (uint32_t)(input_resistance);
-                uint32_t ri_dec = (uint32_t)(input_resistance * 10) % 10;
-                LCD_ShowNum(55, 35, ri_int, 3, 16);
-                LCD_ShowString(78, 35, 10, 22, 16, (uint8_t *)".");
-                LCD_ShowNum(84, 35, ri_dec, 1, 16);
-            }
-            last_disp_rin = input_resistance;
+            uint32_t ri_int = (uint32_t)(input_resistance);
+            uint32_t ri_dec = (uint32_t)(input_resistance * 10) % 10;
+            LCD_ShowNum(55, 35, ri_int, 3, 16);
+            LCD_ShowString(78, 35, 10, 22, 16, (uint8_t *)".");
+            LCD_ShowNum(84, 35, ri_dec, 1, 16);
         }
     }
 
-    // Rout
+    // === Rout（实时更新） ===
     {
-        float diff = output_resistance - last_disp_rout;
-        if(diff < 0) diff = -diff;
-        if(last_disp_rout < -1000 || diff > 20.0f)
+        POINT_COLOR = WHITE;
+        LCD_ShowString(55, 58, 72, 22, 16, (uint8_t *)"       ");
+        POINT_COLOR = BLUE;
+        if(output_resistance >= 1000.0f)
+            LCD_ShowNum(55, 58, (uint32_t)(output_resistance), 4, 16);
+        else
         {
-            POINT_COLOR = WHITE;
-            LCD_ShowString(55, 58, 72, 22, 16, (uint8_t *)"       ");
-            POINT_COLOR = BLUE;
-            if(output_resistance >= 1000.0f)
-                LCD_ShowNum(55, 58, (uint32_t)(output_resistance), 4, 16);
-            else
-            {
-                uint32_t ro_int = (uint32_t)(output_resistance);
-                uint32_t ro_dec = (uint32_t)(output_resistance * 10) % 10;
-                LCD_ShowNum(55, 58, ro_int, 3, 16);
-                LCD_ShowString(78, 58, 10, 22, 16, (uint8_t *)".");
-                LCD_ShowNum(84, 58, ro_dec, 1, 16);
-            }
-            last_disp_rout = output_resistance;
+            uint32_t ro_int = (uint32_t)(output_resistance);
+            uint32_t ro_dec = (uint32_t)(output_resistance * 10) % 10;
+            LCD_ShowNum(55, 58, ro_int, 3, 16);
+            LCD_ShowString(78, 58, 10, 22, 16, (uint8_t *)".");
+            LCD_ShowNum(84, 58, ro_dec, 1, 16);
         }
     }
 
-    // Av
+    // === Av（实时更新） ===
     {
-        float diff = amplification - last_disp_av;
-        if(diff < 0) diff = -diff;
-        if(last_disp_av < -1000 || diff > 0.5f)
-        {
-            POINT_COLOR = WHITE;
-            LCD_ShowString(55, 81, 72, 22, 16, (uint8_t *)"       ");
-            POINT_COLOR = BLUE;
-            uint32_t av_int = (uint32_t)(amplification);
-            uint32_t av_dec = (uint32_t)(amplification * 10) % 10;
-            LCD_ShowNum(55, 81, av_int, 3, 16);
-            LCD_ShowString(78, 81, 10, 22, 16, (uint8_t *)".");
-            LCD_ShowNum(84, 81, av_dec, 1, 16);
-            last_disp_av = amplification;
-        }
+        POINT_COLOR = WHITE;
+        LCD_ShowString(55, 81, 72, 22, 16, (uint8_t *)"       ");
+        POINT_COLOR = BLUE;
+        uint32_t av_int = (uint32_t)(amplification);
+        uint32_t av_dec = (uint32_t)(amplification * 10) % 10;
+        LCD_ShowNum(55, 81, av_int, 3, 16);
+        LCD_ShowString(78, 81, 10, 22, 16, (uint8_t *)".");
+        LCD_ShowNum(84, 81, av_dec, 1, 16);
     }
-
-    #undef CHANGE_THRESHOLD
 }
 
 // ============================================================
@@ -975,47 +931,31 @@ void Page2_Update(void)
         // 恢复trigger2为低电平（下次循环从低电平开始）
         SET_TRIGGER2(GPIO_PIN_RESET);
 
-        // ===== 显示ADC原始值（8个值），仅变化>20才刷新 =====
-        #define P2_DISP_THRESHOLD 20
-        // 保存上次显示值
-        static uint16_t p2_last_disp[8] = {0,0,0,0,0,0,0,0};
+        // ===== 显示ADC原始值（8个值，实时更新） =====
         // LOW CH 4个值: adc1_low, adc2_low, adc3_ac_low, adc3_dc_low
         {
-            uint16_t newvals[4] = {p2_adc1_low, p2_adc2_low, p2_adc3_ac_low, p2_adc3_dc_low};
-            static const uint16_t xs[4] = {55, 55, 55, 55};
-            static const uint16_t ys[4] = {58, 81, 104, 127};
+            uint16_t lows[4] = {p2_adc1_low, p2_adc2_low, p2_adc3_ac_low, p2_adc3_dc_low};
+            static const uint16_t lxs[4] = {55, 55, 55, 55};
+            static const uint16_t lys[4] = {58, 81, 104, 127};
             for(int i = 0; i < 4; i++)
             {
-                int diff = (int)newvals[i] - (int)p2_last_disp[i];
-                if(diff < 0) diff = -diff;
-                if(diff > P2_DISP_THRESHOLD)
-                {
-                    POINT_COLOR = GRAY;
-                    LCD_Fill(xs[i], ys[i], 160, ys[i]+22, WHITE);
-                    LCD_ShowNum(xs[i], ys[i], newvals[i], 4, 16);
-                    p2_last_disp[i] = newvals[i];
-                }
+                LCD_Fill(lxs[i], lys[i], 160, lys[i]+22, WHITE);
+                POINT_COLOR = GRAY;
+                LCD_ShowNum(lxs[i], lys[i], lows[i], 4, 16);
             }
         }
         // HIGH CH 4个值: adc1_high, adc2_high, adc3_ac_high, adc3_dc_high
         {
-            uint16_t newvals[4] = {p2_adc1_high, p2_adc2_high, p2_adc3_ac_high, p2_adc3_dc_high};
-            static const uint16_t xs[4] = {225, 225, 225, 225};
-            static const uint16_t ys[4] = {58, 81, 104, 127};
+            uint16_t highs[4] = {p2_adc1_high, p2_adc2_high, p2_adc3_ac_high, p2_adc3_dc_high};
+            static const uint16_t hxs[4] = {225, 225, 225, 225};
+            static const uint16_t hys[4] = {58, 81, 104, 127};
             for(int i = 0; i < 4; i++)
             {
-                int diff = (int)newvals[i] - (int)p2_last_disp[4+i];
-                if(diff < 0) diff = -diff;
-                if(diff > P2_DISP_THRESHOLD)
-                {
-                    POINT_COLOR = BLACK;
-                    LCD_Fill(xs[i], ys[i], 315, ys[i]+22, WHITE);
-                    LCD_ShowNum(xs[i], ys[i], newvals[i], 4, 16);
-                    p2_last_disp[4+i] = newvals[i];
-                }
+                LCD_Fill(hxs[i], hys[i], 315, hys[i]+22, WHITE);
+                POINT_COLOR = BLACK;
+                LCD_ShowNum(hxs[i], hys[i], highs[i], 4, 16);
             }
         }
-        #undef P2_DISP_THRESHOLD
 
         // ===== 故障判断 =====
         // 可用变量（共8个）:
@@ -1139,12 +1079,6 @@ void Page3_Init(void)
 // ============================================================
 void Page3_Update(void)
 {
-    static uint16_t last_disp_adc1 = 0xFFFF;
-    static uint16_t last_disp_adc2 = 0xFFFF;
-    static uint16_t last_disp_ac = 0xFFFF;
-    static uint16_t last_disp_dc = 0xFFFF;
-    #define P3_DISP_THRESHOLD 10
-
     // 读 ADC1
     {
         uint32_t sum1 = 0;
@@ -1191,59 +1125,25 @@ void Page3_Update(void)
         #undef P3_AVG_CNT
     }
 
-    // 刷新ADC1显示（变化>10才刷新）
-    {
-        int diff = (int)page3_adc1 - (int)last_disp_adc1;
-        if(diff < 0) diff = -diff;
-        if(diff > P3_DISP_THRESHOLD)
-        {
-            LCD_Fill(80, 75, 160, 97, WHITE);
-            POINT_COLOR = BLUE;
-            LCD_ShowNum(80, 75, page3_adc1, 4, 16);
-            last_disp_adc1 = page3_adc1;
-        }
-    }
+    // 刷新ADC1显示（实时更新，无阈值滤波）
+    LCD_Fill(80, 75, 160, 97, WHITE);
+    POINT_COLOR = BLUE;
+    LCD_ShowNum(80, 75, page3_adc1, 4, 16);
 
-    // 刷新ADC2显示（变化>10才刷新）
-    {
-        int diff = (int)page3_adc2 - (int)last_disp_adc2;
-        if(diff < 0) diff = -diff;
-        if(diff > P3_DISP_THRESHOLD)
-        {
-            LCD_Fill(80, 105, 160, 127, WHITE);
-            POINT_COLOR = BLUE;
-            LCD_ShowNum(80, 105, page3_adc2, 4, 16);
-            last_disp_adc2 = page3_adc2;
-        }
-    }
+    // 刷新ADC2显示（实时更新，无阈值滤波）
+    LCD_Fill(80, 105, 160, 127, WHITE);
+    POINT_COLOR = BLUE;
+    LCD_ShowNum(80, 105, page3_adc2, 4, 16);
 
-    // 刷新ADC3ac显示（变化>10才刷新）
-    {
-        int diff = (int)page3_adc3_ac - (int)last_disp_ac;
-        if(diff < 0) diff = -diff;
-        if(diff > P3_DISP_THRESHOLD)
-        {
-            LCD_Fill(80, 135, 160, 157, WHITE);
-            POINT_COLOR = BLUE;
-            LCD_ShowNum(80, 135, page3_adc3_ac, 4, 16);
-            last_disp_ac = page3_adc3_ac;
-        }
-    }
+    // 刷新ADC3ac显示（实时更新，无阈值滤波）
+    LCD_Fill(80, 135, 160, 157, WHITE);
+    POINT_COLOR = BLUE;
+    LCD_ShowNum(80, 135, page3_adc3_ac, 4, 16);
 
-    // 刷新ADC3dc显示（变化>10才刷新）
-    {
-        int diff = (int)page3_adc3_dc - (int)last_disp_dc;
-        if(diff < 0) diff = -diff;
-        if(diff > P3_DISP_THRESHOLD)
-        {
-            LCD_Fill(80, 165, 160, 187, WHITE);
-            POINT_COLOR = BLUE;
-            LCD_ShowNum(80, 165, page3_adc3_dc, 4, 16);
-            last_disp_dc = page3_adc3_dc;
-        }
-    }
-
-    #undef P3_DISP_THRESHOLD
+    // 刷新ADC3dc显示（实时更新，无阈值滤波）
+    LCD_Fill(80, 165, 160, 187, WHITE);
+    POINT_COLOR = BLUE;
+    LCD_ShowNum(80, 165, page3_adc3_dc, 4, 16);
 }
 /* USER CODE END 0 */
 

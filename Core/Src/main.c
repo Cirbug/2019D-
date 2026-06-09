@@ -67,6 +67,12 @@
 #define CH_SEL3_GPIO_PORT   GPIOG
 #define CH_SEL3_GPIO_PIN    GPIO_PIN_14
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// 界面3固定频率（Hz），手动修改后重新编译即可
+#define PAGE3_FIXED_FREQ    50000
+///////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // 同时设置 trigger2(PG13)、trigger3(PG11 相反)、trigger3G14(PG14 相同) 的辅助宏
 #define SET_TRIGGER2(val)                                                      \
     do {                                                                        \
@@ -1102,15 +1108,15 @@ void Page3_Init(void)
 
     // --- 按键提示 ---
     POINT_COLOR = RED;
-    LCD_ShowString(5, 218, 310, 20, 16, (uint8_t *)"Key_UP:+10k  Key0:Change");
+    LCD_ShowString(5, 218, 310, 20, 16, (uint8_t *)"Manual Freq  Key0:Change");
 
     // --- DDS 说明 ---
     POINT_COLOR = BLACK;
-    LCD_ShowString(5, 150, 300, 22, 16, (uint8_t *)"1kHz ~ 500kHz, step=10kHz");
+    LCD_ShowString(5, 150, 300, 22, 16, (uint8_t *)"Fixed by PAGE3_FIXED_FREQ");
 
-    // 重置频率到1kHz并输出
-    page3_freq = 1000;
-    AD9954_Set_Fre(1000.0);
+    // 使用宏定义的固定频率
+    page3_freq = PAGE3_FIXED_FREQ;
+    AD9954_Set_Fre((float)PAGE3_FIXED_FREQ);
     AD9954_Set_Amp(1200);
 }
 
@@ -1258,18 +1264,8 @@ int main(void)
                 case 0: Page0_StartMeasure(); break;
                 case 1: Page1_StartSweep();   break;
                 case 2: Page2_StartMeasure(); break;
-                case 3:
-                    // 界面3：频率+10kHz，超过500k回绕到1k
-                    page3_freq += 10000;
-                    if(page3_freq > 500000) page3_freq = 1000;
-                    AD9954_Set_Fre((float)page3_freq);
-                    // 更新频率显示
-                    {
-                        LCD_Fill(60, 40, 135, 62, WHITE);
-                        POINT_COLOR = BLUE;
-                        LCD_ShowNum(60, 40, page3_freq / 1000, 5, 16);
-                    }
-                    break;
+                // 界面3：频率由 PAGE3_FIXED_FREQ 宏固定，不再由按键控制
+                case 3: break;
             }
         }
 

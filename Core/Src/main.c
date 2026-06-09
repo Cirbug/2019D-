@@ -155,6 +155,8 @@ static int last_p2_adc3_dc_high = 0;
 
 // ======================= 界面3：DDS手动频率控制 =======================
 static uint32_t page3_freq = 1000;         // 当前DDS频率，默认1kHz
+static uint16_t page3_adc1 = 0;            // ADC1 值
+static uint16_t page3_adc2 = 0;            // ADC2 值
 static uint16_t page3_adc3_ac = 0;         // ADC3 IN4 交流值
 static uint16_t page3_adc3_dc = 0;         // ADC3 IN5 AD637直流值
 /* USER CODE END PV */
@@ -1097,14 +1099,26 @@ void Page3_Init(void)
     POINT_COLOR = BLACK;
     LCD_ShowString(140, 40, 40, 22, 16, (uint8_t *)"kHz");
 
-    // --- ADC3 标签 ---
+    // --- ADC1 标签 ---
     POINT_COLOR = GRAY;
-    LCD_ShowString(5, 75, 100, 22, 16, (uint8_t *)"ADC3ac:");
-    LCD_ShowString(5, 105, 100, 22, 16, (uint8_t *)"ADC3dc:");
-
+    LCD_ShowString(5, 75, 100, 22, 16, (uint8_t *)"ADC1:");
     POINT_COLOR = BLUE;
     LCD_ShowString(80, 75, 80, 22, 16, (uint8_t *)"---");
+
+    // --- ADC2 标签 ---
+    POINT_COLOR = GRAY;
+    LCD_ShowString(5, 105, 100, 22, 16, (uint8_t *)"ADC2:");
+    POINT_COLOR = BLUE;
     LCD_ShowString(80, 105, 80, 22, 16, (uint8_t *)"---");
+
+    // --- ADC3 标签 ---
+    POINT_COLOR = GRAY;
+    LCD_ShowString(5, 135, 100, 22, 16, (uint8_t *)"ADC3ac:");
+    LCD_ShowString(5, 165, 100, 22, 16, (uint8_t *)"ADC3dc:");
+
+    POINT_COLOR = BLUE;
+    LCD_ShowString(80, 135, 80, 22, 16, (uint8_t *)"---");
+    LCD_ShowString(80, 165, 80, 22, 16, (uint8_t *)"---");
 
     // --- 按键提示 ---
     POINT_COLOR = RED;
@@ -1112,7 +1126,7 @@ void Page3_Init(void)
 
     // --- DDS 说明 ---
     POINT_COLOR = BLACK;
-    LCD_ShowString(5, 150, 300, 22, 16, (uint8_t *)"Fixed by PAGE3_FIXED_FREQ");
+    LCD_ShowString(5, 195, 300, 22, 16, (uint8_t *)"Fixed by PAGE3_FIXED_FREQ");
 
     // 使用宏定义的固定频率
     page3_freq = PAGE3_FIXED_FREQ;
@@ -1125,9 +1139,39 @@ void Page3_Init(void)
 // ============================================================
 void Page3_Update(void)
 {
+    static uint16_t last_disp_adc1 = 0xFFFF;
+    static uint16_t last_disp_adc2 = 0xFFFF;
     static uint16_t last_disp_ac = 0xFFFF;
     static uint16_t last_disp_dc = 0xFFFF;
     #define P3_DISP_THRESHOLD 10
+
+    // 读 ADC1
+    {
+        uint32_t sum1 = 0;
+        #define P3_ADC1_AVG 4
+        for(int i = 0; i < P3_ADC1_AVG; i++)
+        {
+            HAL_ADC_Start(&hadc1);
+            HAL_Delay(1);
+            sum1 += HAL_ADC_GetValue(&hadc1);
+        }
+        page3_adc1 = (uint16_t)(sum1 / P3_ADC1_AVG);
+        #undef P3_ADC1_AVG
+    }
+
+    // 读 ADC2
+    {
+        uint32_t sum2 = 0;
+        #define P3_ADC2_AVG 4
+        for(int i = 0; i < P3_ADC2_AVG; i++)
+        {
+            HAL_ADC_Start(&hadc2);
+            HAL_Delay(1);
+            sum2 += HAL_ADC_GetValue(&hadc2);
+        }
+        page3_adc2 = (uint16_t)(sum2 / P3_ADC2_AVG);
+        #undef P3_ADC2_AVG
+    }
 
     // 读 ADC3 (IN4=交流, IN5=AD637直流)
     {
@@ -1147,15 +1191,41 @@ void Page3_Update(void)
         #undef P3_AVG_CNT
     }
 
+    // 刷新ADC1显示（变化>10才刷新）
+    {
+        int diff = (int)page3_adc1 - (int)last_disp_adc1;
+        if(diff < 0) diff = -diff;
+        if(diff > P3_DISP_THRESHOLD)
+        {
+            LCD_Fill(80, 75, 160, 97, WHITE);
+            POINT_COLOR = BLUE;
+            LCD_ShowNum(80, 75, page3_adc1, 4, 16);
+            last_disp_adc1 = page3_adc1;
+        }
+    }
+
+    // 刷新ADC2显示（变化>10才刷新）
+    {
+        int diff = (int)page3_adc2 - (int)last_disp_adc2;
+        if(diff < 0) diff = -diff;
+        if(diff > P3_DISP_THRESHOLD)
+        {
+            LCD_Fill(80, 105, 160, 127, WHITE);
+            POINT_COLOR = BLUE;
+            LCD_ShowNum(80, 105, page3_adc2, 4, 16);
+            last_disp_adc2 = page3_adc2;
+        }
+    }
+
     // 刷新ADC3ac显示（变化>10才刷新）
     {
         int diff = (int)page3_adc3_ac - (int)last_disp_ac;
         if(diff < 0) diff = -diff;
         if(diff > P3_DISP_THRESHOLD)
         {
-            LCD_Fill(80, 75, 160, 97, WHITE);
+            LCD_Fill(80, 135, 160, 157, WHITE);
             POINT_COLOR = BLUE;
-            LCD_ShowNum(80, 75, page3_adc3_ac, 4, 16);
+            LCD_ShowNum(80, 135, page3_adc3_ac, 4, 16);
             last_disp_ac = page3_adc3_ac;
         }
     }
@@ -1166,9 +1236,9 @@ void Page3_Update(void)
         if(diff < 0) diff = -diff;
         if(diff > P3_DISP_THRESHOLD)
         {
-            LCD_Fill(80, 105, 160, 127, WHITE);
+            LCD_Fill(80, 165, 160, 187, WHITE);
             POINT_COLOR = BLUE;
-            LCD_ShowNum(80, 105, page3_adc3_dc, 4, 16);
+            LCD_ShowNum(80, 165, page3_adc3_dc, 4, 16);
             last_disp_dc = page3_adc3_dc;
         }
     }

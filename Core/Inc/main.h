@@ -102,6 +102,28 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 
+// ==================== 继电器参数 ====================
+#define RELAY_GPIO_PORT     GPIOB
+#define RELAY_GPIO_PIN      GPIO_PIN_4
+#define RELAY_LOAD_R        5500.0f
+
+#define CH_SEL_GPIO_PORT    GPIOG
+#define CH_SEL_GPIO_PIN     GPIO_PIN_13
+#define CH_SEL2_GPIO_PORT   GPIOG
+#define CH_SEL2_GPIO_PIN    GPIO_PIN_11
+#define CH_SEL3_GPIO_PORT   GPIOG
+#define CH_SEL3_GPIO_PIN    GPIO_PIN_14
+
+#define SET_TRIGGER2(val)                                                      \
+    do {                                                                        \
+        HAL_GPIO_WritePin(CH_SEL_GPIO_PORT, CH_SEL_GPIO_PIN, (val));          \
+        HAL_GPIO_WritePin(CH_SEL3_GPIO_PORT, CH_SEL3_GPIO_PIN, (val));        \
+        if((val) == GPIO_PIN_RESET)                                             \
+            HAL_GPIO_WritePin(CH_SEL2_GPIO_PORT, CH_SEL2_GPIO_PIN, GPIO_PIN_SET);   \
+        else                                                                    \
+            HAL_GPIO_WritePin(CH_SEL2_GPIO_PORT, CH_SEL2_GPIO_PIN, GPIO_PIN_RESET); \
+    } while(0)
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

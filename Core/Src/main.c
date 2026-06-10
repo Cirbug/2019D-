@@ -871,41 +871,36 @@ static float p2_last_rin = 0;
 
 void Page2_Update(void)
 {
-    // 测ADC3 (16次平均，更稳定)
+    // 测ADC3 (扫描模式，界面0风格)
     {
         uint32_t sum_ac = 0, sum_dc = 0;
-        HAL_ADC_Stop(&hadc3);
         HAL_ADC_Start(&hadc3);
-        for(int i = 0; i < 16; i++)
+        for(int i = 0; i < 12; i++)
         {
             HAL_ADC_PollForConversion(&hadc3, 10);
             sum_ac += (uint16_t)HAL_ADC_GetValue(&hadc3);
             HAL_ADC_PollForConversion(&hadc3, 10);
             sum_dc += (uint16_t)HAL_ADC_GetValue(&hadc3);
         }
-        HAL_ADC_Stop(&hadc3);
-        p2_adc3_ac = (uint16_t)(sum_ac / 16);
-        p2_adc3_dc = (uint16_t)(sum_dc / 16);
+        p2_adc3_ac = (uint16_t)(sum_ac / 12);
+        p2_adc3_dc = (uint16_t)(sum_dc / 12);
     }
 
-    // 测ADC1+ADC2 (12次平均，更稳定)
+    // 测ADC1+ADC2 (8次平均，界面0风格)
     {
         uint32_t sum1 = 0, sum2 = 0;
-        HAL_ADC_Stop(&hadc1);
-        HAL_ADC_Stop(&hadc2);
-        for(int i = 0; i < 12; i++)
+        for(int i = 0; i < 8; i++)
         {
             HAL_ADC_Start(&hadc1);
             HAL_Delay(1);
             sum1 += HAL_ADC_GetValue(&hadc1);
-            HAL_ADC_Stop(&hadc1);
+            
             HAL_ADC_Start(&hadc2);
             HAL_Delay(1);
             sum2 += HAL_ADC_GetValue(&hadc2);
-            HAL_ADC_Stop(&hadc2);
         }
-        p2_adc1 = (uint16_t)(sum1 / 12);
-        p2_adc2 = (uint16_t)(sum2 / 12);
+        p2_adc1 = (uint16_t)(sum1 / 8);
+        p2_adc2 = (uint16_t)(sum2 / 8);
     }
 
     // 显示4个ADC原始值（仅变化>阈值才刷新）
@@ -928,76 +923,69 @@ void Page2_Update(void)
         }
     }
 
-    // 计算并显示输入电阻 Rin (Y=155) — 仅变化>5%才刷新
+    // 计算并平滑显示输入电阻 Rin (Y=155)
     {
         const float R_series = 4200.0f;
-        float new_rin;
+        float raw_rin;
         if(p2_adc1 > p2_adc2 && p2_adc2 > 20)
         {
             float r = (float)p2_adc2 / (float)(p2_adc1 - p2_adc2);
-            new_rin = r * R_series;
+            raw_rin = r * R_series;
         }
-        else new_rin = 0;
+        else raw_rin = 0;
 
-        float diff = new_rin - p2_last_rin;
-        if(diff < 0) diff = -diff;
-        if(diff > p2_last_rin * 0.05f || (p2_last_rin < 1.0f && new_rin >= 1.0f) || (p2_last_rin >= 1.0f && new_rin < 1.0f))
+        // EMA 平滑滤波 (alpha=0.3)
+        p2_input_resistance = p2_input_resistance * 0.7f + raw_rin * 0.3f;
+
+        LCD_Fill(200, 155, 315, 155+22, WHITE);
+        POINT_COLOR = BLUE;
+        if(p2_input_resistance >= 1000.0f)
+            LCD_ShowNum(200, 155, (uint32_t)(p2_input_resistance), 4, 16);
+        else
         {
-            p2_input_resistance = new_rin;
-            p2_last_rin = new_rin;
-
-            LCD_Fill(200, 155, 315, 155+22, WHITE);
-            POINT_COLOR = BLUE;
-            if(p2_input_resistance >= 1000.0f)
-                LCD_ShowNum(200, 155, (uint32_t)(p2_input_resistance), 4, 16);
-            else if(p2_input_resistance > 0.1f)
-            {
-                uint32_t ri_int = (uint32_t)(p2_input_resistance);
-                uint32_t ri_dec = (uint32_t)(p2_input_resistance * 10) % 10;
-                LCD_ShowNum(200, 155, ri_int, 3, 16);
-                LCD_ShowString(223, 155, 10, 22, 16, (uint8_t *)".");
-                LCD_ShowNum(229, 155, ri_dec, 1, 16);
-            }
-            else
-                LCD_ShowString(200, 155, 60, 22, 16, (uint8_t *)"---");
+            uint32_t ri_int = (uint32_t)(p2_input_resistance);
+            uint32_t ri_dec = (uint32_t)(p2_input_resistance * 10) % 10;
+            LCD_ShowNum(200, 155, ri_int, 3, 16);
+            LCD_ShowString(223, 155, 10, 22, 16, (uint8_t *)".");
+            LCD_ShowNum(229, 155, ri_dec, 1, 16);
         }
     }
 
     // ===== 故障判断 =====
-    // 可用变量: p2_adc1, p2_adc2, p2_adc3_ac, p2_adc3_dc
+    // 可用变量: p2_adc1, p2_adc2, p2_adc3_ac, p2_adc3_dc, p2_input_resistance
     //
     // 状态定义: 0=正常, 1=短路, 2=断路
     //     ↓↓↓ 请在下方填入你的判断条件 ↓↓↓
 
         // ---- R1 ----
         // TODO: 请根据实测值填写R1的判断条件
-        if(p2_adc3_ac > 2000)
+        if((p2_adc2<60)&&(p2_adc3_ac<60)&&(2870<p2_adc3_dc)&&(p2_adc3_dc<3000))
             fault_status[0] = 1;     // 短路条件
-        else if(p2_adc3_ac >2000)
+        else if((p2_input_resistance> 4745) && (p2_adc3_ac<100))
             fault_status[0] = 2;     // 断路条件
         else
             fault_status[0] = 0;     // 正常
 
         // ---- R2 ----
-        if((p2_adc2<20) &&(380<p2_adc3_dc)&&( p2_adc3_dc< 420))
+        if((p2_adc2<60)&&(p2_adc3_ac<60)&&(2700<p2_adc3_dc)&&(p2_adc3_dc<2890)&&(p2_input_resistance> 4745))
             fault_status[1] = 1;     // 短路条件
-        else if((400<p2_adc2)&& (p2_adc2<450) &&( p2_adc3_ac< 20)&&(120<p2_adc3_dc)&&(p2_adc3_dc < 160))
+        else if((60<p2_adc2)&& (p2_adc2<160) &&( p2_adc3_ac< 60)&&(1000<p2_adc3_dc)&&(p2_adc3_dc < 1200))
             fault_status[1] = 2;     // 断路条件
         else
             fault_status[1] = 0;     // 正常
 
         // ---- R3 ----
-        if((180<p2_adc2)&& (p2_adc2<220) &&(380<p2_adc3_dc)&&( p2_adc3_dc< 420))
+        if((800<p2_adc2)&& (p2_adc2<950) &&(2700<p2_adc3_dc)&&( p2_adc3_dc< 3000))
             fault_status[2] = 1;     // 短路条件
-        else if((10<p2_adc2)&& (p2_adc2<40) &&(p2_adc3_dc< 20)&&(p2_adc3_ac< 20))
+        else if((100<p2_adc2)&& (p2_adc2<200) &&(p2_adc3_dc< 100)&&(p2_adc3_ac< 60))
             fault_status[2] = 2;     // 断路条件
         else
             fault_status[2] = 0;     // 正常
 
         // ---- R4 ----
-        if((p2_adc2<5) &&( p2_adc3_dc< 20)&&( p2_adc3_ac< 20))
+        if((50<p2_adc2)&&(p2_adc2<100)&&(p2_adc3_ac<60)&&(p2_adc3_dc<60))
             fault_status[3] = 1;     // 短路条件
-        else if( p2_adc3_ac< 10)
+        else if( (p2_input_resistance< 4745) &&(1000<p2_adc2)&&(p2_adc2<1200)&&( p2_adc3_ac<100))
             fault_status[3] = 2;     // 断路条件
         else
             fault_status[3] = 0;     // 正常条件

@@ -769,38 +769,39 @@ void Page2_Init(void)
     POINT_COLOR = BLUE;
     LCD_ShowString(240, 5, 80, 20, 16, (uint8_t *)"STOP");
 
-    // --- ADC原始值（低电平通道） ---
+    // --- ADC原始值 (单通道，不再区分LOW/HIGH) ---
     POINT_COLOR = GRAY;
-    LCD_ShowString(5, 35, 140, 22, 16, (uint8_t *)"LOW CH:");
+    LCD_ShowString(5, 35, 140, 22, 16, (uint8_t *)"ADC:");
     LCD_ShowString(5, 58, 140, 22, 16, (uint8_t *)"ADC1:");
     LCD_ShowString(5, 81, 140, 22, 16, (uint8_t *)"ADC2:");
     LCD_ShowString(5, 104, 140, 22, 16, (uint8_t *)"ADC3ac:");
     LCD_ShowString(5, 127, 140, 22, 16, (uint8_t *)"ADC3dc:");
 
-    // --- ADC原始值（高电平通道） ---
+    // --- ADC3ac 短路(load) / 断路(open) 值 ---
     POINT_COLOR = BLACK;
-    LCD_ShowString(170, 35, 140, 22, 16, (uint8_t *)"HIGH CH:");
-    LCD_ShowString(170, 58, 140, 22, 16, (uint8_t *)"ADC1:");
-    LCD_ShowString(170, 81, 140, 22, 16, (uint8_t *)"ADC2:");
-    LCD_ShowString(170, 104, 140, 22, 16, (uint8_t *)"ADC3ac:");
-    LCD_ShowString(170, 127, 140, 22, 16, (uint8_t *)"ADC3dc:");
+    LCD_ShowString(5, 155, 140, 22, 16, (uint8_t *)"ADC3ac_open:");
+    LCD_ShowString(170, 155, 140, 22, 16, (uint8_t *)"ADC3ac_load:");
+    // 占位值
+    POINT_COLOR = BLUE;
+    LCD_ShowString(55, 155, 60, 22, 16, (uint8_t *)"----");
+    LCD_ShowString(220, 155, 60, 22, 16, (uint8_t *)"----");
 
     // --- 4个电阻状态 (屏幕下方) ---
     POINT_COLOR = BLACK;
-    LCD_ShowString(5, 155, 30, 22, 16, (uint8_t *)"R1:");
-    LCD_ShowString(85, 155, 30, 22, 16, (uint8_t *)"R2:");
-    LCD_ShowString(165, 155, 30, 22, 16, (uint8_t *)"R3:");
-    LCD_ShowString(245, 155, 30, 22, 16, (uint8_t *)"R4:");
+    LCD_ShowString(5, 182, 30, 22, 16, (uint8_t *)"R1:");
+    LCD_ShowString(85, 182, 30, 22, 16, (uint8_t *)"R2:");
+    LCD_ShowString(165, 182, 30, 22, 16, (uint8_t *)"R3:");
+    LCD_ShowString(245, 182, 30, 22, 16, (uint8_t *)"R4:");
     for(int i = 0; i < 4; i++)
     {
         uint16_t x = 25 + (i * 80);
         POINT_COLOR = BLUE;
-        LCD_ShowString(x, 175, 72, 22, 16, (uint8_t *)"---");
+        LCD_ShowString(x, 202, 72, 22, 16, (uint8_t *)"---");
     }
 
-    // --- 按键提示 ---
+    // --- 按键提示 (12号字体) ---
     POINT_COLOR = RED;
-    LCD_ShowString(5, 218, 310, 20, 16, (uint8_t *)"Key0:Change  Key_UP:Start/Stop");
+    LCD_ShowString(5, 224, 310, 14, 12, (uint8_t *)"Key0:Change  Key_UP:Start/Stop");
 }
 
 void Page2_StartMeasure(void)
@@ -824,188 +825,142 @@ void Page2_StartMeasure(void)
     }
 }
 
-// 页面2跨步骤变量
-static uint16_t p2_u_load = 0;    // 带载值
+// 页面2变量（不区分高低电平通道）
+static uint16_t p2_adc1 = 0;
+static uint16_t p2_adc2 = 0;
+static uint16_t p2_adc3_ac = 0;
+static uint16_t p2_adc3_dc = 0;
+static uint16_t p2_adc3ac_open = 0;   // PB4断开（断路）
+static uint16_t p2_adc3ac_load = 0;   // PB4吸合（短路）
 
-// trigger2低电平(通道1直通)时的ADC值
-static uint16_t p2_adc1_low = 0;
-static uint16_t p2_adc2_low = 0;
-static uint16_t p2_adc3_ac_low = 0;
-static uint16_t p2_adc3_dc_low = 0;
-
-// trigger2高电平(通道2分压)时的ADC值
-static uint16_t p2_adc1_high = 0;
-static uint16_t p2_adc2_high = 0;
-static uint16_t p2_adc3_ac_high = 0;
-static uint16_t p2_adc3_dc_high = 0;
+// 辅助函数：读取ADC3 (扫描模式，同时返回交流/直流均值)
+static void P2_ReadADC3(uint16_t *out_ac, uint16_t *out_dc, int cnt)
+{
+    uint32_t sum_ac = 0, sum_dc = 0;
+    HAL_ADC_Stop(&hadc3);
+    HAL_ADC_Start(&hadc3);
+    for(int i = 0; i < cnt; i++)
+    {
+        HAL_ADC_PollForConversion(&hadc3, 10);   // 等IN4(交流)
+        sum_ac += (uint16_t)HAL_ADC_GetValue(&hadc3);
+        HAL_ADC_PollForConversion(&hadc3, 10);   // 等IN5(AD637直流)
+        sum_dc += (uint16_t)HAL_ADC_GetValue(&hadc3);
+    }
+    HAL_ADC_Stop(&hadc3);
+    *out_ac = (uint16_t)(sum_ac / cnt);
+    *out_dc = (uint16_t)(sum_dc / cnt);
+}
 
 void Page2_Update(void)
 {
-    static uint8_t p2_mstep = 0;  // 0=低电平测, 1=高电平测, 2=计算显示
+    static uint8_t p2_mstep = 0;  // 0=测open(断路), 1=测load(短路), 2=计算显示
 
     if(p2_mstep == 0)
     {
-        // ===== 第1步：trigger2低电平(通道1直通)，测ADC1+ADC2+ADC3 =====
-        // 确保trigger2为低电平（同时trigger3高电平）
-        SET_TRIGGER2(GPIO_PIN_RESET);
-        HAL_Delay(200);  // 等待继电器稳定（缓慢切换）
+        // ===== 第1步：PB4断开(open)，测所有ADC =====
+        P2_ReadADC3(&p2_adc3_ac, &p2_adc3_dc, 12);
+        p2_adc3ac_open = p2_adc3_ac;   // 保存open值
 
-        // 测ADC1+ADC2（先Stop确保干净状态，再Start轮询读取）
-        uint32_t sum1 = 0, sum2 = 0;
-        HAL_ADC_Stop(&hadc1);
-        HAL_ADC_Stop(&hadc2);
-        for(int i = 0; i < 8; i++)
+        // 测ADC1+ADC2
         {
-            HAL_ADC_Start(&hadc1);
-            HAL_Delay(1);
-            sum1 += HAL_ADC_GetValue(&hadc1);
+            uint32_t sum1 = 0, sum2 = 0;
             HAL_ADC_Stop(&hadc1);
-            HAL_ADC_Start(&hadc2);
-            HAL_Delay(1);
-            sum2 += HAL_ADC_GetValue(&hadc2);
             HAL_ADC_Stop(&hadc2);
-        }
-        p2_adc1_low = (uint16_t)(sum1 / 8);
-        p2_adc2_low = (uint16_t)(sum2 / 8);
-
-        // 测ADC3 (扫描模式：IN4=交流, IN5=直流)
-        // 注意：先Stop确保干净状态，再Start一次，连续轮询两个通道，最后Stop
-        {
-            uint32_t sum_ac = 0, sum_dc = 0;
-            #define P2_SAMPLE_CNT 12
-            HAL_ADC_Stop(&hadc3);
-            HAL_ADC_Start(&hadc3);
-            for(int i = 0; i < P2_SAMPLE_CNT; i++)
+            for(int i = 0; i < 8; i++)
             {
-                HAL_ADC_PollForConversion(&hadc3, 10);   // 等IN4(交流)
-                sum_ac += (uint16_t)HAL_ADC_GetValue(&hadc3);
-                HAL_ADC_PollForConversion(&hadc3, 10);   // 等IN5(AD637直流)
-                sum_dc += (uint16_t)HAL_ADC_GetValue(&hadc3);
+                HAL_ADC_Start(&hadc1);
+                HAL_Delay(1);
+                sum1 += HAL_ADC_GetValue(&hadc1);
+                HAL_ADC_Stop(&hadc1);
+                HAL_ADC_Start(&hadc2);
+                HAL_Delay(1);
+                sum2 += HAL_ADC_GetValue(&hadc2);
+                HAL_ADC_Stop(&hadc2);
             }
-            HAL_ADC_Stop(&hadc3);
-            p2_adc3_ac_low = (uint16_t)(sum_ac / P2_SAMPLE_CNT);
-            p2_adc3_dc_low = (uint16_t)(sum_dc / P2_SAMPLE_CNT);
-            #undef P2_SAMPLE_CNT
+            p2_adc1 = (uint16_t)(sum1 / 8);
+            p2_adc2 = (uint16_t)(sum2 / 8);
         }
 
         p2_mstep = 1;
     }
     else if(p2_mstep == 1)
     {
-        // ===== 第2步：trigger2高电平(通道2分压)，测ADC1+ADC2+ADC3 =====
-        SET_TRIGGER2(GPIO_PIN_SET);
-        HAL_Delay(50);  // 等待继电器稳定
+        // ===== 第2步：PB4吸合(load)，仅测ADC3ac =====
+        HAL_GPIO_WritePin(RELAY_GPIO_PORT, RELAY_GPIO_PIN, GPIO_PIN_SET);
+        HAL_Delay(100);  // 等待PB4继电器稳定
 
-        // 测ADC1+ADC2（先Stop确保干净状态，再Start轮询读取）
-        uint32_t sum1 = 0, sum2 = 0;
-        HAL_ADC_Stop(&hadc1);
-        HAL_ADC_Stop(&hadc2);
-        for(int i = 0; i < 8; i++)
         {
-            HAL_ADC_Start(&hadc1);
-            HAL_Delay(1);
-            sum1 += HAL_ADC_GetValue(&hadc1);
-            HAL_ADC_Stop(&hadc1);
-            HAL_ADC_Start(&hadc2);
-            HAL_Delay(1);
-            sum2 += HAL_ADC_GetValue(&hadc2);
-            HAL_ADC_Stop(&hadc2);
+            uint16_t ac, dc;
+            P2_ReadADC3(&ac, &dc, 12);
+            p2_adc3ac_load = ac;   // 保存load值
         }
-        p2_adc1_high = (uint16_t)(sum1 / 8);
-        p2_adc2_high = (uint16_t)(sum2 / 8);
 
-        // 测ADC3 (扫描模式：IN4=交流, IN5=直流)
-        {
-            uint32_t sum_ac = 0, sum_dc = 0;
-            #define P2_SAMPLE_CNT 12
-            HAL_ADC_Stop(&hadc3);
-            HAL_ADC_Start(&hadc3);
-            for(int i = 0; i < P2_SAMPLE_CNT; i++)
-            {
-                HAL_ADC_PollForConversion(&hadc3, 10);   // 等IN4(交流)
-                sum_ac += (uint16_t)HAL_ADC_GetValue(&hadc3);
-                HAL_ADC_PollForConversion(&hadc3, 10);   // 等IN5(AD637直流)
-                sum_dc += (uint16_t)HAL_ADC_GetValue(&hadc3);
-            }
-            HAL_ADC_Stop(&hadc3);
-            p2_adc3_ac_high = (uint16_t)(sum_ac / P2_SAMPLE_CNT);
-            p2_adc3_dc_high = (uint16_t)(sum_dc / P2_SAMPLE_CNT);
-            #undef P2_SAMPLE_CNT
-        }
+        // 断开PB4
+        HAL_GPIO_WritePin(RELAY_GPIO_PORT, RELAY_GPIO_PIN, GPIO_PIN_RESET);
+        HAL_Delay(100);
 
         p2_mstep = 2;
     }
     else
     {
         // ===== 第3步：计算并显示 =====
-        // 恢复trigger2为低电平（下次循环从低电平开始）
-        SET_TRIGGER2(GPIO_PIN_RESET);
 
-        // ===== 显示ADC原始值（8个值，实时更新） =====
-        // LOW CH 4个值: adc1_low, adc2_low, adc3_ac_low, adc3_dc_low
+        // 显示4个ADC原始值
         {
-            uint16_t lows[4] = {p2_adc1_low, p2_adc2_low, p2_adc3_ac_low, p2_adc3_dc_low};
-            static const uint16_t lxs[4] = {55, 55, 55, 55};
-            static const uint16_t lys[4] = {58, 81, 104, 127};
+            uint16_t vals[4] = {p2_adc1, p2_adc2, p2_adc3_ac, p2_adc3_dc};
+            static const uint16_t xs[4] = {55, 55, 55, 55};
+            static const uint16_t ys[4] = {58, 81, 104, 127};
             for(int i = 0; i < 4; i++)
             {
-                LCD_Fill(lxs[i], lys[i], 160, lys[i]+22, WHITE);
+                LCD_Fill(xs[i], ys[i], 160, ys[i]+22, WHITE);
                 POINT_COLOR = GRAY;
-                LCD_ShowNum(lxs[i], lys[i], lows[i], 4, 16);
+                LCD_ShowNum(xs[i], ys[i], vals[i], 4, 16);
             }
         }
-        // HIGH CH 4个值: adc1_high, adc2_high, adc3_ac_high, adc3_dc_high
-        {
-            uint16_t highs[4] = {p2_adc1_high, p2_adc2_high, p2_adc3_ac_high, p2_adc3_dc_high};
-            static const uint16_t hxs[4] = {225, 225, 225, 225};
-            static const uint16_t hys[4] = {58, 81, 104, 127};
-            for(int i = 0; i < 4; i++)
-            {
-                LCD_Fill(hxs[i], hys[i], 315, hys[i]+22, WHITE);
-                POINT_COLOR = BLACK;
-                LCD_ShowNum(hxs[i], hys[i], highs[i], 4, 16);
-            }
-        }
+
+        // 显示ADC3ac open / load 两个值
+        LCD_Fill(55, 155, 160, 155+22, WHITE);
+        POINT_COLOR = GRAY;
+        LCD_ShowNum(55, 155, p2_adc3ac_open, 4, 16);
+        LCD_Fill(220, 155, 315, 155+22, WHITE);
+        POINT_COLOR = BLACK;
+        LCD_ShowNum(220, 155, p2_adc3ac_load, 4, 16);
 
         // ===== 故障判断 =====
-        // 可用变量（共8个）:
-        //   低电平(通道1直通): p2_adc1_low, p2_adc2_low, p2_adc3_ac_low, p2_adc3_dc_low
-        //   高电平(通道2升压): p2_adc1_high, p2_adc2_high, p2_adc3_ac_high, p2_adc3_dc_high
+        // 可用变量: p2_adc1, p2_adc2, p2_adc3_ac, p2_adc3_dc, p2_adc3ac_open, p2_adc3ac_load
         //
         // 状态定义: 0=正常, 1=短路, 2=断路
         //     ↓↓↓ 请在下方填入你的判断条件 ↓↓↓
 
-        // ---- R1 (trigger2高电平通道2下，通过ADC1/ADC3判断) ----
+        // ---- R1 ----
         // TODO: 请根据实测值填写R1的判断条件
-        // 可用变量: p2_adc1_high, p2_adc2_high, p2_adc3_ac_high, p2_adc3_dc_high
-        // 状态: 0=正常, 1=短路, 2=断路
-        if(p2_adc3_ac_high > 2000)
+        if(p2_adc3_ac > 2000)
             fault_status[0] = 1;     // 短路条件
-        else if(p2_adc3_ac_high >2000)
+        else if(p2_adc3_ac >2000)
             fault_status[0] = 2;     // 断路条件
         else
             fault_status[0] = 0;     // 正常
 
         // ---- R2 ----
-        if((p2_adc2_low<20) &&(380<p2_adc3_dc_low)&&( p2_adc3_dc_low< 420))
+        if((p2_adc2<20) &&(380<p2_adc3_dc)&&( p2_adc3_dc< 420))
             fault_status[1] = 1;     // 短路条件
-        else if((400<p2_adc2_low)&& (p2_adc2_low<450) &&( p2_adc3_ac_low< 20)&&(120<p2_adc3_dc_low)&&(p2_adc3_dc_low < 160))
+        else if((400<p2_adc2)&& (p2_adc2<450) &&( p2_adc3_ac< 20)&&(120<p2_adc3_dc)&&(p2_adc3_dc < 160))
             fault_status[1] = 2;     // 断路条件
         else
             fault_status[1] = 0;     // 正常
 
         // ---- R3 ----
-        if((180<p2_adc2_low)&& (p2_adc2_low<220) &&(380<p2_adc3_dc_low)&&( p2_adc3_dc_low< 420))
+        if((180<p2_adc2)&& (p2_adc2<220) &&(380<p2_adc3_dc)&&( p2_adc3_dc< 420))
             fault_status[2] = 1;     // 短路条件
-        else if((10<p2_adc2_low)&& (p2_adc2_low<40) &&(p2_adc3_dc_low< 20)&&(p2_adc3_ac_low< 20))
+        else if((10<p2_adc2)&& (p2_adc2<40) &&(p2_adc3_dc< 20)&&(p2_adc3_ac< 20))
             fault_status[2] = 2;     // 断路条件
         else
             fault_status[2] = 0;     // 正常
 
         // ---- R4 ----
-        if((p2_adc2_low<5) &&( p2_adc3_dc_low< 20)&&( p2_adc3_ac_low< 20))
+        if((p2_adc2<5) &&( p2_adc3_dc< 20)&&( p2_adc3_ac< 20))
             fault_status[3] = 1;     // 短路条件
-        else if( p2_adc3_ac_low< 10)
+        else if( p2_adc3_ac< 10)
             fault_status[3] = 2;     // 断路条件
         else
             fault_status[3] = 0;     // 正常条件
@@ -1015,9 +970,9 @@ void Page2_Update(void)
         for(int i = 0; i < 4; i++)
         {
             uint16_t x = 25 + (i * 80);
-            LCD_Fill(x, 175, x + 72, 197, WHITE);
+            LCD_Fill(x, 202, x + 72, 222, WHITE);
             POINT_COLOR = status_color[fault_status[i]];
-            LCD_ShowString(x, 175, 72, 22, 16, (uint8_t *)fault_str[fault_status[i]]);
+            LCD_ShowString(x, 202, 72, 20, 16, (uint8_t *)fault_str[fault_status[i]]);
         }
 
         p2_mstep = 0;

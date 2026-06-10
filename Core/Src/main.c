@@ -243,79 +243,112 @@ void Page0_Init(void)
     } while(0)
 
 // ============================================================
-//  界面0：更新测量数据（仅变化>20时才刷新）
+//  界面0：更新测量数据（阈值滤波，减少跳动）
 // ============================================================
 void Page0_Update(void)
 {
-    // === ADC1(Us)（实时更新） ===
-    LCD_Fill(260, 35, 315, 55, WHITE);
-    POINT_COLOR = GRAY;
-    LCD_ShowNum(260, 35, adc1_val, 4, 16);
+    static uint16_t last_d_adc1 = 0, last_d_adc2 = 0, last_d_ld = 0, last_d_op = 0, last_d_dc = 0;
+    static float last_d_rin = 0, last_d_rout = 0, last_d_av = 0;
 
-    // === ADC2(Ui)（实时更新） ===
-    LCD_Fill(260, 58, 315, 78, WHITE);
-    POINT_COLOR = GRAY;
-    LCD_ShowNum(260, 58, adc2_val, 4, 16);
+    // === ADC1(Us) 变化>3才刷新 ===
+    if(abs((int)adc1_val - (int)last_d_adc1) > 3) {
+        LCD_Fill(260, 35, 315, 55, WHITE);
+        POINT_COLOR = GRAY;
+        LCD_ShowNum(260, 35, adc1_val, 4, 16);
+        last_d_adc1 = adc1_val;
+    }
 
-    // === ADC3(load)（实时更新） ===
-    LCD_Fill(260, 81, 315, 101, WHITE);
-    POINT_COLOR = GRAY;
-    LCD_ShowNum(260, 81, adc3_val1, 4, 16);
+    // === ADC2(Ui) ===
+    if(abs((int)adc2_val - (int)last_d_adc2) > 3) {
+        LCD_Fill(260, 58, 315, 78, WHITE);
+        POINT_COLOR = GRAY;
+        LCD_ShowNum(260, 58, adc2_val, 4, 16);
+        last_d_adc2 = adc2_val;
+    }
 
-    // === ADC3(open)（实时更新） ===
-    LCD_Fill(260, 104, 315, 124, WHITE);
-    POINT_COLOR = GRAY;
-    LCD_ShowNum(260, 104, adc3_val2, 4, 16);
+    // === ADC3(load) ===
+    if(abs((int)adc3_val1 - (int)last_d_ld) > 3) {
+        LCD_Fill(260, 81, 315, 101, WHITE);
+        POINT_COLOR = GRAY;
+        LCD_ShowNum(260, 81, adc3_val1, 4, 16);
+        last_d_ld = adc3_val1;
+    }
 
-    // === ADC3(DC)（实时更新） ===
-    LCD_Fill(260, 127, 315, 147, WHITE);
-    POINT_COLOR = GRAY;
-    LCD_ShowNum(260, 127, adc3_valDC, 4, 16);
+    // === ADC3(open) ===
+    if(abs((int)adc3_val2 - (int)last_d_op) > 3) {
+        LCD_Fill(260, 104, 315, 124, WHITE);
+        POINT_COLOR = GRAY;
+        LCD_ShowNum(260, 104, adc3_val2, 4, 16);
+        last_d_op = adc3_val2;
+    }
 
-    // === Rin（实时更新） ===
+    // === ADC3(DC) ===
+    if(abs((int)adc3_valDC - (int)last_d_dc) > 3) {
+        LCD_Fill(260, 127, 315, 147, WHITE);
+        POINT_COLOR = GRAY;
+        LCD_ShowNum(260, 127, adc3_valDC, 4, 16);
+        last_d_dc = adc3_valDC;
+    }
+
+    // === Rin 变化>5%才刷新 ===
     {
-        POINT_COLOR = WHITE;
-        LCD_ShowString(55, 35, 72, 22, 16, (uint8_t *)"       ");
-        POINT_COLOR = BLUE;
-        if(input_resistance >= 1000.0f)
-            LCD_ShowNum(55, 35, (uint32_t)(input_resistance), 4, 16);
-        else
+        float diff = input_resistance - last_d_rin;
+        if(diff < 0) diff = -diff;
+        if(diff > last_d_rin * 0.05f || (last_d_rin < 1.0f && input_resistance >= 1.0f) || (last_d_rin >= 1.0f && input_resistance < 1.0f))
         {
-            uint32_t ri_int = (uint32_t)(input_resistance);
-            uint32_t ri_dec = (uint32_t)(input_resistance * 10) % 10;
-            LCD_ShowNum(55, 35, ri_int, 3, 16);
-            LCD_ShowString(78, 35, 10, 22, 16, (uint8_t *)".");
-            LCD_ShowNum(84, 35, ri_dec, 1, 16);
+            last_d_rin = input_resistance;
+            LCD_Fill(55, 35, 127, 35+22, WHITE);
+            POINT_COLOR = BLUE;
+            if(input_resistance >= 1000.0f)
+                LCD_ShowNum(55, 35, (uint32_t)(input_resistance), 4, 16);
+            else
+            {
+                uint32_t ri_int = (uint32_t)(input_resistance);
+                uint32_t ri_dec = (uint32_t)(input_resistance * 10) % 10;
+                LCD_ShowNum(55, 35, ri_int, 3, 16);
+                LCD_ShowString(78, 35, 10, 22, 16, (uint8_t *)".");
+                LCD_ShowNum(84, 35, ri_dec, 1, 16);
+            }
         }
     }
 
-    // === Rout（实时更新） ===
+    // === Rout 变化>5%才刷新 ===
     {
-        POINT_COLOR = WHITE;
-        LCD_ShowString(55, 58, 72, 22, 16, (uint8_t *)"       ");
-        POINT_COLOR = BLUE;
-        if(output_resistance >= 1000.0f)
-            LCD_ShowNum(55, 58, (uint32_t)(output_resistance), 4, 16);
-        else
+        float diff = output_resistance - last_d_rout;
+        if(diff < 0) diff = -diff;
+        if(diff > last_d_rout * 0.05f || (last_d_rout < 1.0f && output_resistance >= 1.0f) || (last_d_rout >= 1.0f && output_resistance < 1.0f))
         {
-            uint32_t ro_int = (uint32_t)(output_resistance);
-            uint32_t ro_dec = (uint32_t)(output_resistance * 10) % 10;
-            LCD_ShowNum(55, 58, ro_int, 3, 16);
-            LCD_ShowString(78, 58, 10, 22, 16, (uint8_t *)".");
-            LCD_ShowNum(84, 58, ro_dec, 1, 16);
+            last_d_rout = output_resistance;
+            LCD_Fill(55, 58, 127, 58+22, WHITE);
+            POINT_COLOR = BLUE;
+            if(output_resistance >= 1000.0f)
+                LCD_ShowNum(55, 58, (uint32_t)(output_resistance), 4, 16);
+            else
+            {
+                uint32_t ro_int = (uint32_t)(output_resistance);
+                uint32_t ro_dec = (uint32_t)(output_resistance * 10) % 10;
+                LCD_ShowNum(55, 58, ro_int, 3, 16);
+                LCD_ShowString(78, 58, 10, 22, 16, (uint8_t *)".");
+                LCD_ShowNum(84, 58, ro_dec, 1, 16);
+            }
         }
     }
 
-    // === Av（实时更新） ===
+    // === Av 变化>5%才刷新 ===
     {
-        POINT_COLOR = WHITE;
-        LCD_ShowString(55, 81, 72, 22, 16, (uint8_t *)"       ");
-        POINT_COLOR = BLUE;
-        uint32_t av_int = (uint32_t)(amplification);
-        uint32_t av_dec = (uint32_t)(amplification * 10) % 10;
-        LCD_ShowNum(55, 81, av_int, 3, 16);
-        LCD_ShowString(78, 81, 10, 22, 16, (uint8_t *)".");
-        LCD_ShowNum(84, 81, av_dec, 1, 16);
+        float diff = amplification - last_d_av;
+        if(diff < 0) diff = -diff;
+        if(diff > last_d_av * 0.05f || (last_d_av < 1.0f && amplification >= 1.0f) || (last_d_av >= 1.0f && amplification < 1.0f))
+        {
+            last_d_av = amplification;
+            LCD_Fill(55, 81, 127, 81+22, WHITE);
+            POINT_COLOR = BLUE;
+            uint32_t av_int = (uint32_t)(amplification);
+            uint32_t av_dec = (uint32_t)(amplification * 10) % 10;
+            LCD_ShowNum(55, 81, av_int, 3, 16);
+            LCD_ShowString(78, 81, 10, 22, 16, (uint8_t *)".");
+            LCD_ShowNum(84, 81, av_dec, 1, 16);
+        }
     }
 }
 
@@ -777,14 +810,11 @@ void Page2_Init(void)
     LCD_ShowString(5, 104, 140, 22, 16, (uint8_t *)"ADC3ac:");
     LCD_ShowString(5, 127, 140, 22, 16, (uint8_t *)"ADC3dc:");
 
-    // --- ADC3ac 短路(load) / 断路(open) 值 ---
+    // --- 输入电阻 Rin (右侧 Y=155) ---
     POINT_COLOR = BLACK;
-    LCD_ShowString(5, 155, 140, 22, 16, (uint8_t *)"ADC3ac_open:");
-    LCD_ShowString(170, 155, 140, 22, 16, (uint8_t *)"ADC3ac_load:");
-    // 占位值
+    LCD_ShowString(170, 155, 40, 22, 16, (uint8_t *)"Rin:");
     POINT_COLOR = BLUE;
-    LCD_ShowString(55, 155, 60, 22, 16, (uint8_t *)"----");
-    LCD_ShowString(220, 155, 60, 22, 16, (uint8_t *)"----");
+    LCD_ShowString(200, 155, 60, 22, 16, (uint8_t *)"---");
 
     // --- 4个电阻状态 (屏幕下方) ---
     POINT_COLOR = BLACK;
@@ -825,112 +855,119 @@ void Page2_StartMeasure(void)
     }
 }
 
-// 页面2变量（不区分高低电平通道）
+// 页面2变量
 static uint16_t p2_adc1 = 0;
 static uint16_t p2_adc2 = 0;
 static uint16_t p2_adc3_ac = 0;
 static uint16_t p2_adc3_dc = 0;
-static uint16_t p2_adc3ac_open = 0;   // PB4断开（断路）
-static uint16_t p2_adc3ac_load = 0;   // PB4吸合（短路）
+static float p2_input_resistance = 0;  // 输入电阻 (Ω)
 
-// 辅助函数：读取ADC3 (扫描模式，同时返回交流/直流均值)
-static void P2_ReadADC3(uint16_t *out_ac, uint16_t *out_dc, int cnt)
-{
-    uint32_t sum_ac = 0, sum_dc = 0;
-    HAL_ADC_Stop(&hadc3);
-    HAL_ADC_Start(&hadc3);
-    for(int i = 0; i < cnt; i++)
-    {
-        HAL_ADC_PollForConversion(&hadc3, 10);   // 等IN4(交流)
-        sum_ac += (uint16_t)HAL_ADC_GetValue(&hadc3);
-        HAL_ADC_PollForConversion(&hadc3, 10);   // 等IN5(AD637直流)
-        sum_dc += (uint16_t)HAL_ADC_GetValue(&hadc3);
-    }
-    HAL_ADC_Stop(&hadc3);
-    *out_ac = (uint16_t)(sum_ac / cnt);
-    *out_dc = (uint16_t)(sum_dc / cnt);
-}
+// 滤波last值
+static uint16_t p2_last_adc1 = 0;
+static uint16_t p2_last_adc2 = 0;
+static uint16_t p2_last_adc3ac = 0;
+static uint16_t p2_last_adc3dc = 0;
+static float p2_last_rin = 0;
 
 void Page2_Update(void)
 {
-    static uint8_t p2_mstep = 0;  // 0=测open(断路), 1=测load(短路), 2=计算显示
-
-    if(p2_mstep == 0)
+    // 测ADC3 (16次平均，更稳定)
     {
-        // ===== 第1步：PB4断开(open)，测所有ADC =====
-        P2_ReadADC3(&p2_adc3_ac, &p2_adc3_dc, 12);
-        p2_adc3ac_open = p2_adc3_ac;   // 保存open值
-
-        // 测ADC1+ADC2
+        uint32_t sum_ac = 0, sum_dc = 0;
+        HAL_ADC_Stop(&hadc3);
+        HAL_ADC_Start(&hadc3);
+        for(int i = 0; i < 16; i++)
         {
-            uint32_t sum1 = 0, sum2 = 0;
+            HAL_ADC_PollForConversion(&hadc3, 10);
+            sum_ac += (uint16_t)HAL_ADC_GetValue(&hadc3);
+            HAL_ADC_PollForConversion(&hadc3, 10);
+            sum_dc += (uint16_t)HAL_ADC_GetValue(&hadc3);
+        }
+        HAL_ADC_Stop(&hadc3);
+        p2_adc3_ac = (uint16_t)(sum_ac / 16);
+        p2_adc3_dc = (uint16_t)(sum_dc / 16);
+    }
+
+    // 测ADC1+ADC2 (12次平均，更稳定)
+    {
+        uint32_t sum1 = 0, sum2 = 0;
+        HAL_ADC_Stop(&hadc1);
+        HAL_ADC_Stop(&hadc2);
+        for(int i = 0; i < 12; i++)
+        {
+            HAL_ADC_Start(&hadc1);
+            HAL_Delay(1);
+            sum1 += HAL_ADC_GetValue(&hadc1);
             HAL_ADC_Stop(&hadc1);
+            HAL_ADC_Start(&hadc2);
+            HAL_Delay(1);
+            sum2 += HAL_ADC_GetValue(&hadc2);
             HAL_ADC_Stop(&hadc2);
-            for(int i = 0; i < 8; i++)
-            {
-                HAL_ADC_Start(&hadc1);
-                HAL_Delay(1);
-                sum1 += HAL_ADC_GetValue(&hadc1);
-                HAL_ADC_Stop(&hadc1);
-                HAL_ADC_Start(&hadc2);
-                HAL_Delay(1);
-                sum2 += HAL_ADC_GetValue(&hadc2);
-                HAL_ADC_Stop(&hadc2);
-            }
-            p2_adc1 = (uint16_t)(sum1 / 8);
-            p2_adc2 = (uint16_t)(sum2 / 8);
         }
-
-        p2_mstep = 1;
+        p2_adc1 = (uint16_t)(sum1 / 12);
+        p2_adc2 = (uint16_t)(sum2 / 12);
     }
-    else if(p2_mstep == 1)
+
+    // 显示4个ADC原始值（仅变化>阈值才刷新）
     {
-        // ===== 第2步：PB4吸合(load)，仅测ADC3ac =====
-        HAL_GPIO_WritePin(RELAY_GPIO_PORT, RELAY_GPIO_PIN, GPIO_PIN_SET);
-        HAL_Delay(100);  // 等待PB4继电器稳定
-
+        uint16_t vals[4] = {p2_adc1, p2_adc2, p2_adc3_ac, p2_adc3_dc};
+        uint16_t *lasts[4] = {&p2_last_adc1, &p2_last_adc2, &p2_last_adc3ac, &p2_last_adc3dc};
+        static const uint16_t xs[4] = {55, 55, 55, 55};
+        static const uint16_t ys[4] = {58, 81, 104, 127};
+        for(int i = 0; i < 4; i++)
         {
-            uint16_t ac, dc;
-            P2_ReadADC3(&ac, &dc, 12);
-            p2_adc3ac_load = ac;   // 保存load值
-        }
-
-        // 断开PB4
-        HAL_GPIO_WritePin(RELAY_GPIO_PORT, RELAY_GPIO_PIN, GPIO_PIN_RESET);
-        HAL_Delay(100);
-
-        p2_mstep = 2;
-    }
-    else
-    {
-        // ===== 第3步：计算并显示 =====
-
-        // 显示4个ADC原始值
-        {
-            uint16_t vals[4] = {p2_adc1, p2_adc2, p2_adc3_ac, p2_adc3_dc};
-            static const uint16_t xs[4] = {55, 55, 55, 55};
-            static const uint16_t ys[4] = {58, 81, 104, 127};
-            for(int i = 0; i < 4; i++)
+            int d = (int)vals[i] - (int)(*lasts[i]);
+            if(d < 0) d = -d;
+            if(d > 3)   // 变化>3才刷新
             {
                 LCD_Fill(xs[i], ys[i], 160, ys[i]+22, WHITE);
                 POINT_COLOR = GRAY;
                 LCD_ShowNum(xs[i], ys[i], vals[i], 4, 16);
+                *lasts[i] = vals[i];
             }
         }
+    }
 
-        // 显示ADC3ac open / load 两个值
-        LCD_Fill(55, 155, 160, 155+22, WHITE);
-        POINT_COLOR = GRAY;
-        LCD_ShowNum(55, 155, p2_adc3ac_open, 4, 16);
-        LCD_Fill(220, 155, 315, 155+22, WHITE);
-        POINT_COLOR = BLACK;
-        LCD_ShowNum(220, 155, p2_adc3ac_load, 4, 16);
+    // 计算并显示输入电阻 Rin (Y=155) — 仅变化>5%才刷新
+    {
+        const float R_series = 4200.0f;
+        float new_rin;
+        if(p2_adc1 > p2_adc2 && p2_adc2 > 20)
+        {
+            float r = (float)p2_adc2 / (float)(p2_adc1 - p2_adc2);
+            new_rin = r * R_series;
+        }
+        else new_rin = 0;
 
-        // ===== 故障判断 =====
-        // 可用变量: p2_adc1, p2_adc2, p2_adc3_ac, p2_adc3_dc, p2_adc3ac_open, p2_adc3ac_load
-        //
-        // 状态定义: 0=正常, 1=短路, 2=断路
-        //     ↓↓↓ 请在下方填入你的判断条件 ↓↓↓
+        float diff = new_rin - p2_last_rin;
+        if(diff < 0) diff = -diff;
+        if(diff > p2_last_rin * 0.05f || (p2_last_rin < 1.0f && new_rin >= 1.0f) || (p2_last_rin >= 1.0f && new_rin < 1.0f))
+        {
+            p2_input_resistance = new_rin;
+            p2_last_rin = new_rin;
+
+            LCD_Fill(200, 155, 315, 155+22, WHITE);
+            POINT_COLOR = BLUE;
+            if(p2_input_resistance >= 1000.0f)
+                LCD_ShowNum(200, 155, (uint32_t)(p2_input_resistance), 4, 16);
+            else if(p2_input_resistance > 0.1f)
+            {
+                uint32_t ri_int = (uint32_t)(p2_input_resistance);
+                uint32_t ri_dec = (uint32_t)(p2_input_resistance * 10) % 10;
+                LCD_ShowNum(200, 155, ri_int, 3, 16);
+                LCD_ShowString(223, 155, 10, 22, 16, (uint8_t *)".");
+                LCD_ShowNum(229, 155, ri_dec, 1, 16);
+            }
+            else
+                LCD_ShowString(200, 155, 60, 22, 16, (uint8_t *)"---");
+        }
+    }
+
+    // ===== 故障判断 =====
+    // 可用变量: p2_adc1, p2_adc2, p2_adc3_ac, p2_adc3_dc
+    //
+    // 状态定义: 0=正常, 1=短路, 2=断路
+    //     ↓↓↓ 请在下方填入你的判断条件 ↓↓↓
 
         // ---- R1 ----
         // TODO: 请根据实测值填写R1的判断条件
@@ -974,9 +1011,6 @@ void Page2_Update(void)
             POINT_COLOR = status_color[fault_status[i]];
             LCD_ShowString(x, 202, 72, 20, 16, (uint8_t *)fault_str[fault_status[i]]);
         }
-
-        p2_mstep = 0;
-    }
 }
 
 // ============================================================

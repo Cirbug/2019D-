@@ -766,7 +766,7 @@ void Page1_SweepTask(void)
             freq_hist[total_idx] = freq;
         }
         
-        // 第一个点固定为 0dB 参考
+        // 第一个点固定为绘图 0dB 参考
         if(total_idx == 0)
         {
             av_max = (float)uo_rms;
@@ -810,7 +810,7 @@ void Page1_SweepTask(void)
         if(freq >= 1000) {
             LCD_ShowNum(10, 222, freq/1000, 3, 12);
             LCD_ShowNum(30, 222, freq%1000, 3, 12);
-            LCD_ShowString(50, 222, 20, 16, 12, (uint8_t *)"Hz");
+            LCD_ShowString(50, 222, 20, 16, 12, (uint8_t *)"kHz");
         } else {
             LCD_ShowNum(10, 222, freq, 3, 12);
         }
@@ -833,22 +833,7 @@ void Page1_SweepTask(void)
         LCD_ShowNum(170, 222, (uint8_t)((float)(total_idx+1) / TOTAL_POINTS * 100), 3, 12);
         LCD_ShowString(190, 222, 20, 16, 12, (uint8_t *)"%");
 
-        // 穿越检测上限截止频率 fH:
-        // 增益从 >= -3dB 穿越到 <= -3dB 时记录（第二次达到 -3dB）
-        if(total_idx == 0)
-        {
-            prev_db_val = db_val;
-        }
-        else
-        {
-            // 上限截止频率: 上一个点 >= -3dB, 当前点 <= -3dB
-            if(!fH_found && prev_db_val >= -3.0f && db_val <= -3.0f)
-            {
-                fH_freq = freq;
-                fH_found = 1;
-            }
-            prev_db_val = db_val;
-        }
+        // fH 在扫频完成后通过遍历历史数据计算，此处不实时检测
 
         sweep_i++;
         total_idx++;
@@ -857,35 +842,78 @@ void Page1_SweepTask(void)
         return;  // 每帧只画1个点
 
 sweep_done:
-        // 调试：输出第一个点和最大 Uo 值
+        // 计算上限截止频率 fH：最高 dB - 3dB 的频率
         {
-            uint16_t uo_ref = 0;
+            uint16_t uo_max = 0;
+            int max_idx = 0;
             for(int i = 0; i < total_idx; i++)
             {
-                if(uo_hist[i] > uo_ref)
-                    uo_ref = uo_hist[i];
+                if(uo_hist[i] > uo_max)
+                {
+                    uo_max = uo_hist[i];
+                    max_idx = i;
+                }
             }
-            printf("Sweep Done: total=%d, Uo0=%u, UoMax=%u, fH=%lu\r\n",
-                   total_idx, (unsigned int)uo_hist[0], (unsigned int)uo_ref,
+            
+            fH_found = 0;
+            if(uo_max >= 1)
+            {
+                uint16_t uo_3db = (uint16_t)((float)uo_max * 0.707f);  // Uo_max - 3dB
+                // 从最大值之后找第二个 Uo ≤ uo_3db 的点
+                int count_3db = 0;
+                for(int i = max_idx + 1; i < total_idx; i++)
+                {
+                    if(uo_hist[i] <= uo_3db)
+                    {
+                        count_3db++;
+                        if(count_3db == 2)
+                        {
+                            fH_freq = freq_hist[i];
+                            fH_found = 1;
+                            break;
+                        }
+                    }
+                }
+                // 如果只有一个点，也使用它
+                if(!fH_found && count_3db == 1)
+                {
+                    for(int i = max_idx + 1; i < total_idx; i++)
+                    {
+                        if(uo_hist[i] <= uo_3db)
+                        {
+                            fH_freq = freq_hist[i];
+                            fH_found = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            printf("Sweep Done: total=%d, UoMax=%u @ %luHz, fH=%luHz\r\n",
+                   total_idx, (unsigned int)uo_max, (unsigned long)freq_hist[max_idx],
                    (unsigned long)(fH_found ? fH_freq : 0));
-        }
-
-        // 清除底部，显示最终结果
-        POINT_COLOR = WHITE;
-        LCD_Fill(5, 222, 315, 239, WHITE);
-        POINT_COLOR = RED;
-        LCD_ShowString(5, 222, 40, 16, 12, (uint8_t *)"FH=");
-        if(fH_found && fH_freq > 0)
-        {
-            if(fH_freq >= 1000)
-                LCD_ShowNum(35, 222, fH_freq / 1000, 3, 12);
+            
+            POINT_COLOR = WHITE;
+            LCD_Fill(5, 222, 315, 239, WHITE);
+            POINT_COLOR = RED;
+            LCD_ShowString(5, 222, 40, 16, 12, (uint8_t *)"FH=");
+            if(fH_found && fH_freq > 0)
+            {
+                if(fH_freq >= 1000)
+                {
+                    LCD_ShowNum(35, 222, fH_freq / 1000, 3, 12);
+                    LCD_ShowString(60, 222, 30, 16, 12, (uint8_t *)"kHz");
+                }
+                else
+                {
+                    LCD_ShowNum(35, 222, fH_freq, 3, 12);
+                    LCD_ShowString(60, 222, 20, 16, 12, (uint8_t *)"Hz");
+                }
+            }
             else
-                LCD_ShowNum(35, 222, fH_freq, 3, 12);
-            LCD_ShowString(60, 222, 20, 16, 12, (uint8_t *)"Hz");
-        }
-        else
-        {
-            LCD_ShowString(35, 222, 60, 16, 12, (uint8_t *)"NONE");
+            {
+                LCD_ShowString(35, 222, 60, 16, 12, (uint8_t *)"NONE");
+            }
         }
 
         AD9954_Set_Fre(1000.0);

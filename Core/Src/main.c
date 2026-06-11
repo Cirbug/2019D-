@@ -699,11 +699,11 @@ void Page1_SweepTask(void)
     else if(sweep_step == 3)
     {
         // ===== 三段分段扫频 =====
-        // 段0: 0~300Hz, 步进2Hz, 151点
-        // 段1: 500~2000Hz, 步进500Hz, 4点
-        // 段2: 2k~500kHz, 步进10kHz, 50点
-        // 总计205点, 映射到280px
-        #define TOTAL_POINTS    97
+        // 段0: 0~300Hz, 步进10Hz, 31点
+        // 段1: 500~5000Hz, 步进200Hz, 23点
+        // 段2: 5k~500kHz, 步进10kHz, 50点
+        // 总计104点, 映射到280px
+        #define TOTAL_POINTS    104
         static uint8_t   segment = 0;      // 当前段号 0/1/2
         static int       total_idx = 0;    // 全局点索引 0~96
         static uint16_t  uo_hist[TOTAL_POINTS];      // 保存所有Uo值
@@ -727,9 +727,9 @@ void Page1_SweepTask(void)
         }
         else if(segment == 1)
         {
-            if(sweep_i < 16)
+            if(sweep_i < 23)
             {
-                freq = 500 + (uint32_t)sweep_i * 100;  // 500,600,700,...,2000 Hz
+                freq = 500 + (uint32_t)sweep_i * 200;  // 500,700,900,...,4900 Hz
                 x_pixel = GRAPH_X0 + (uint16_t)((uint32_t)total_idx * 280 / TOTAL_POINTS);
             }
             else
@@ -743,7 +743,7 @@ void Page1_SweepTask(void)
         {
             if(sweep_i < 50)
             {
-                freq = 2000 + (uint32_t)sweep_i * 10000;  // 2k,12k,22k,...,492k
+                freq = 5000 + (uint32_t)sweep_i * 10000;  // 5k,15k,25k,...,495k
                 x_pixel = GRAPH_X0 + (uint16_t)((uint32_t)total_idx * 280 / TOTAL_POINTS);
             }
             else

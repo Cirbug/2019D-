@@ -959,33 +959,33 @@ void Page2_Update(void)
 
         // ---- R1 ----
         // TODO: 请根据实测值填写R1的判断条件
-        if((p2_adc2<60)&&(p2_adc3_ac<60)&&(2870<p2_adc3_dc)&&(p2_adc3_dc<3000))
+        if((50<p2_adc2)&&(p2_adc2<250)&&(p2_adc3_ac<60)&&(3130<p2_adc3_dc)&&(p2_adc3_dc<3300))
             fault_status[0] = 1;     // 短路条件
-        else if((p2_input_resistance> 4745) && (p2_adc3_ac<100))
+        else if((p2_input_resistance> 5100) && (p2_adc3_ac<100))
             fault_status[0] = 2;     // 断路条件
         else
             fault_status[0] = 0;     // 正常
 
         // ---- R2 ----
-        if((p2_adc2<60)&&(p2_adc3_ac<60)&&(2700<p2_adc3_dc)&&(p2_adc3_dc<2890)&&(p2_input_resistance> 4745))
+        if((50<p2_adc2)&&(p2_adc2<150)&&(p2_adc3_ac<100)&&(3000<p2_adc3_dc)&&(p2_adc3_dc<3130))
             fault_status[1] = 1;     // 短路条件
-        else if((60<p2_adc2)&& (p2_adc2<160) &&( p2_adc3_ac< 60)&&(1000<p2_adc3_dc)&&(p2_adc3_dc < 1200))
+        else if((150<p2_adc2)&& (p2_adc2<300) &&( p2_adc3_ac< 60)&&(1000<p2_adc3_dc)&&(p2_adc3_dc < 1200))
             fault_status[1] = 2;     // 断路条件
         else
             fault_status[1] = 0;     // 正常
 
         // ---- R3 ----
-        if((800<p2_adc2)&& (p2_adc2<950) &&(2700<p2_adc3_dc)&&( p2_adc3_dc< 3000))
+        if((800<p2_adc2)&& (p2_adc2<1100) &&(3000<p2_adc3_dc)&&( p2_adc3_dc< 3600))
             fault_status[2] = 1;     // 短路条件
-        else if((100<p2_adc2)&& (p2_adc2<200) &&(p2_adc3_dc< 100)&&(p2_adc3_ac< 60))
+        else if((250<p2_adc2)&& (p2_adc2<400) &&(p2_adc3_dc< 100)&&(p2_adc3_ac< 60))
             fault_status[2] = 2;     // 断路条件
         else
             fault_status[2] = 0;     // 正常
 
         // ---- R4 ----
-        if((50<p2_adc2)&&(p2_adc2<100)&&(p2_adc3_ac<60)&&(p2_adc3_dc<60))
+        if((100<p2_adc2)&&(p2_adc2<250)&&(p2_adc3_ac<60)&&(p2_adc3_dc<60))
             fault_status[3] = 1;     // 短路条件
-        else if( (p2_input_resistance< 4745) &&(1000<p2_adc2)&&(p2_adc2<1200)&&( p2_adc3_ac<100))
+        else if( (p2_input_resistance< 5100) &&(1100<p2_adc2)&&(p2_adc2<1300)&&( p2_adc3_ac<100))
             fault_status[3] = 2;     // 断路条件
         else
             fault_status[3] = 0;     // 正常条件
